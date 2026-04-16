@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Pointer</title>
+  <title>Pointer Debug</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <style>
@@ -34,6 +34,14 @@
       font-size:14px;
       opacity:0.7;
     }
+
+    #debug {
+      margin-top:15px;
+      font-size:12px;
+      opacity:0.85;
+      white-space:pre;
+      text-align:left;
+    }
   </style>
 </head>
 
@@ -42,10 +50,11 @@
 <div id="arrow">⬆️</div>
 <button onclick="init()">Start</button>
 <div id="status">Wacht op start...</div>
+<div id="debug"></div>
 
 <script>
 const target = {
-  lat: 52.9586,   // Den Helder
+  lat: 52.9586,
   lon: 4.7593
 };
 
@@ -56,12 +65,20 @@ function setStatus(t) {
   document.getElementById("status").innerText = t;
 }
 
-// Start alles na user click (belangrijk iOS!)
+function updateDebug(data) {
+  document.getElementById("debug").innerText =
+    `lat: ${data.lat ?? '-'}\n` +
+    `lon: ${data.lon ?? '-'}\n` +
+    `heading: ${data.heading ?? '-'}\n` +
+    `target: ${data.target ?? '-'}\n` +
+    `distance: ${data.distance ?? '-'} m`;
+}
+
 async function init() {
 
   setStatus("Sensoren starten...");
 
-  // 🔑 iOS permission voor kompas
+  // iOS kompas permissie
   if (typeof DeviceOrientationEvent.requestPermission === 'function') {
     const res = await DeviceOrientationEvent.requestPermission();
     if (res !== 'granted') {
@@ -73,7 +90,6 @@ async function init() {
   // 🧭 Kompas
   window.addEventListener('deviceorientation', (event) => {
     if (event.alpha === null) return;
-
     heading = 360 - event.alpha;
     update();
   }, true);
@@ -92,7 +108,7 @@ async function init() {
   setStatus("Sensoren actief");
 }
 
-// 📐 Bearing berekening
+// 📐 Bearing
 function bearing(lat1, lon1, lat2, lon2) {
   const toRad = x => x * Math.PI / 180;
   const toDeg = x => x * 180 / Math.PI;
@@ -108,7 +124,25 @@ function bearing(lat1, lon1, lat2, lon2) {
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
 
-// 🔄 Update pijl
+// 📏 Afstand
+function distance(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = x => x * Math.PI / 180;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  return Math.round(R * c);
+}
+
+// 🔄 Update UI
 function update() {
   if (!position) return;
 
@@ -123,12 +157,28 @@ function update() {
 
   document.getElementById("arrow")
     .style.transform = `rotate(${angle}deg)`;
-}
 
+  const dist = distance(
+    position.latitude,
+    position.longitude,
+    target.lat,
+    target.lon
+  );
+
+  updateDebug({
+    lat: position.latitude.toFixed(6),
+    lon: position.longitude.toFixed(6),
+    heading: heading.toFixed(1),
+    target: targetBearing.toFixed(1),
+    distance: dist
+  });
+}
+</script>
+
+<script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js');
 }
-
 </script>
 
 </body>
