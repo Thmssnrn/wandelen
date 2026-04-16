@@ -4,33 +4,44 @@
   <meta charset="utf-8">
   <title>Pointer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <style>
     body {
       margin:0;
+      height:100vh;
       display:flex;
+      flex-direction:column;
       justify-content:center;
       align-items:center;
-      height:100vh;
       background:#111;
       color:white;
       font-family:sans-serif;
-      flex-direction:column;
     }
+
     #arrow {
-      font-size:80px;
-      transition: transform 0.2s linear;
+      font-size:90px;
+      transition: transform 0.15s linear;
     }
+
     button {
       margin-top:20px;
-      padding:10px;
+      padding:12px 20px;
       font-size:16px;
+    }
+
+    #status {
+      margin-top:10px;
+      font-size:14px;
+      opacity:0.7;
     }
   </style>
 </head>
+
 <body>
 
 <div id="arrow">⬆️</div>
 <button onclick="init()">Start</button>
+<div id="status">Wacht op start...</div>
 
 <script>
 const target = {
@@ -41,31 +52,50 @@ const target = {
 let heading = 0;
 let position = null;
 
-// Vraag permissie (iOS!)
-async function init() {
-  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-    await DeviceOrientationEvent.requestPermission();
-  }
-
-  window.addEventListener('deviceorientationabsolute', onOrientation, true);
-  window.addEventListener('deviceorientation', onOrientation, true);
-
-  navigator.geolocation.watchPosition(pos => {
-    position = pos.coords;
-  }, console.error, { enableHighAccuracy: true });
+function setStatus(t) {
+  document.getElementById("status").innerText = t;
 }
 
-function onOrientation(event) {
-  if (event.absolute && event.alpha != null) {
+// Start alles na user click (belangrijk iOS!)
+async function init() {
+
+  setStatus("Sensoren starten...");
+
+  // 🔑 iOS permission voor kompas
+  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+    const res = await DeviceOrientationEvent.requestPermission();
+    if (res !== 'granted') {
+      setStatus("Kompas geweigerd");
+      return;
+    }
+  }
+
+  // 🧭 Kompas
+  window.addEventListener('deviceorientation', (event) => {
+    if (event.alpha === null) return;
+
     heading = 360 - event.alpha;
     update();
-  }
+  }, true);
+
+  // 📍 GPS
+  navigator.geolocation.watchPosition(
+    pos => {
+      position = pos.coords;
+      setStatus("GPS actief");
+      update();
+    },
+    err => setStatus("GPS fout: " + err.message),
+    { enableHighAccuracy: true }
+  );
+
+  setStatus("Sensoren actief");
 }
 
-// Bereken richting naar target
+// 📐 Bearing berekening
 function bearing(lat1, lon1, lat2, lon2) {
-  const toRad = x => x * Math.PI/180;
-  const toDeg = x => x * 180/Math.PI;
+  const toRad = x => x * Math.PI / 180;
+  const toDeg = x => x * 180 / Math.PI;
 
   const dLon = toRad(lon2 - lon1);
   lat1 = toRad(lat1);
@@ -78,6 +108,7 @@ function bearing(lat1, lon1, lat2, lon2) {
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
 
+// 🔄 Update pijl
 function update() {
   if (!position) return;
 
@@ -92,9 +123,6 @@ function update() {
 
   document.getElementById("arrow")
     .style.transform = `rotate(${angle}deg)`;
-}
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js');
 }
 </script>
 
