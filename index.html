@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pointer Debug v2</title>
+<title>Pointer FINAL</title>
 
 <style>
 body {
@@ -20,25 +20,26 @@ body {
 
 #arrow {
   font-size:90px;
-  transition: transform 0.1s linear;
+  transition: transform 0.08s linear;
 }
 
 #status {
   margin-top:10px;
   font-size:14px;
-  opacity:0.8;
+  opacity:0.85;
 }
 
 #debug {
-  margin-top:15px;
+  margin-top:12px;
   font-size:12px;
   white-space:pre;
   text-align:left;
   opacity:0.9;
+  max-width:90vw;
 }
 
 button {
-  margin-top:15px;
+  margin-top:12px;
   padding:12px 18px;
   font-size:16px;
 }
@@ -50,7 +51,7 @@ button {
 <div id="arrow">⬆️</div>
 <button onclick="init()">Start</button>
 
-<div id="status">Idle</div>
+<div id="status">idle</div>
 <div id="debug"></div>
 
 <script>
@@ -65,7 +66,9 @@ let heading = null;
 let gpsOK = false;
 let compassOK = false;
 
-// 🔴 HARD DEBUG
+let lastUpdate = 0;
+
+// 🔴 hard error catcher
 window.onerror = (m) => {
   document.getElementById("debug").innerText = "JS ERROR:\n" + m;
 };
@@ -74,26 +77,31 @@ function setStatus(t) {
   document.getElementById("status").innerText = t;
 }
 
-function debug(obj) {
+function dbg(obj) {
   document.getElementById("debug").innerText =
     JSON.stringify(obj, null, 2);
 }
 
-// 🚀 START
+// 🚀 INIT
 async function init() {
 
-  setStatus("Init...");
+  setStatus("init...");
 
-  // 🧭 Compass permission (iOS vereist user gesture)
+  // 🧭 compass permission (iOS)
   if (typeof DeviceOrientationEvent.requestPermission === "function") {
-    const res = await DeviceOrientationEvent.requestPermission();
-    if (res !== "granted") {
-      setStatus("Kompas geweigerd ❌");
+    try {
+      const res = await DeviceOrientationEvent.requestPermission();
+      if (res !== "granted") {
+        setStatus("NO COMPASS PERMISSION");
+        return;
+      }
+    } catch(e) {
+      setStatus("COMPASS ERROR");
       return;
     }
   }
 
-  // 🧭 Compass listener
+  // 🧭 compass
   window.addEventListener("deviceorientation", (e) => {
 
     if (typeof e.alpha === "number") {
@@ -102,30 +110,36 @@ async function init() {
     } else {
       compassOK = false;
     }
-
-    tryUpdate();
   });
 
   // 📍 GPS
   if (!navigator.geolocation) {
-    setStatus("Geen GPS API ❌");
+    setStatus("NO GPS API");
     return;
   }
 
   navigator.geolocation.watchPosition(
-    pos => {
-      position = pos.coords;
+    p => {
+      position = p.coords;
       gpsOK = true;
-      tryUpdate();
     },
-    err => {
+    e => {
       gpsOK = false;
-      setStatus("GPS error: " + err.message);
+      setStatus("GPS ERROR: " + e.message);
     },
     { enableHighAccuracy: true }
   );
 
-  setStatus("Wachten op GPS + kompas...");
+  setStatus("running");
+
+  startLoop();
+}
+
+// 🔁 ALWAYS RUNNING LOOP (BELANGRIJK)
+function startLoop() {
+  setInterval(() => {
+    tryUpdate();
+  }, 100);
 }
 
 // 📐 bearing
@@ -160,20 +174,39 @@ function distance(lat1, lon1, lat2, lon2) {
   return Math.round(2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
 }
 
-// 🔄 ONLY UPDATE WHEN READY
+// 🔄 CORE LOOP
 function tryUpdate() {
 
-  debug({
+  const now = Date.now();
+
+  // altijd debug tonen
+  dbg({
     gpsOK,
     compassOK,
-    position: position ? "YES" : "NO",
-    heading: heading
+    position: !!position,
+    heading: heading,
+    age: position ? Math.round((now - lastUpdate)/1000) + "s" : "no gps"
   });
 
-  if (!gpsOK || !compassOK || !position || heading === null) {
-    setStatus("Wachten op data...");
+  // state message
+  if (!position && !heading) {
+    setStatus("NO DATA");
     return;
   }
+
+  if (!position) {
+    setStatus("WAIT GPS");
+    return;
+  }
+
+  if (!heading && heading !== 0) {
+    setStatus("WAIT COMPASS");
+    return;
+  }
+
+  // update ok
+  lastUpdate = now;
+  setStatus("LIVE");
 
   const b = bearing(
     position.latitude,
@@ -186,25 +219,6 @@ function tryUpdate() {
 
   document.getElementById("arrow").style.transform =
     `rotate(${angle}deg)`;
-
-  const dist = distance(
-    position.latitude,
-    position.longitude,
-    target.lat,
-    target.lon
-  );
-
-  setStatus("LIVE");
-
-  debug({
-    gpsOK,
-    compassOK,
-    lat: position.latitude.toFixed(6),
-    lon: position.longitude.toFixed(6),
-    heading: heading.toFixed(1),
-    bearing: b.toFixed(1),
-    distance: dist + "m"
-  });
 }
 </script>
 
