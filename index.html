@@ -124,6 +124,11 @@ function update() {
   document.getElementById("arrow")
     .style.transform = `rotate(${angle}deg)`;
 }
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js');
+}
+
 </script>
 
 </body>
