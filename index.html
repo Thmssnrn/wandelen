@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pointer Debug</title>
+<title>Pointer Debug v2</title>
 
 <style>
 body {
@@ -17,9 +17,31 @@ body {
   color:white;
   font-family:sans-serif;
 }
-#arrow { font-size:90px; }
-#debug { font-size:12px; white-space:pre; margin-top:10px; }
-button { padding:12px; margin-top:10px; }
+
+#arrow {
+  font-size:90px;
+  transition: transform 0.1s linear;
+}
+
+#status {
+  margin-top:10px;
+  font-size:14px;
+  opacity:0.8;
+}
+
+#debug {
+  margin-top:15px;
+  font-size:12px;
+  white-space:pre;
+  text-align:left;
+  opacity:0.9;
+}
+
+button {
+  margin-top:15px;
+  padding:12px 18px;
+  font-size:16px;
+}
 </style>
 </head>
 
@@ -27,104 +49,163 @@ button { padding:12px; margin-top:10px; }
 
 <div id="arrow">⬆️</div>
 <button onclick="init()">Start</button>
-<div id="status">idle</div>
+
+<div id="status">Idle</div>
 <div id="debug"></div>
 
 <script>
+const target = {
+  lat: 52.9586,
+  lon: 4.7593
+};
 
-const target = { lat: 52.9586, lon: 4.7593 };
+let position = null;
+let heading = null;
 
-let pos = null;
-let heading = 0;
+let gpsOK = false;
+let compassOK = false;
 
-function log(t) {
+// 🔴 HARD DEBUG
+window.onerror = (m) => {
+  document.getElementById("debug").innerText = "JS ERROR:\n" + m;
+};
+
+function setStatus(t) {
   document.getElementById("status").innerText = t;
 }
 
-function dbg(obj) {
+function debug(obj) {
   document.getElementById("debug").innerText =
     JSON.stringify(obj, null, 2);
 }
 
-// 🔥 HARD ERROR CATCH
-window.onerror = (m) => dbg({error:m});
-
+// 🚀 START
 async function init() {
 
-  log("init...");
+  setStatus("Init...");
 
-  // compass permission
+  // 🧭 Compass permission (iOS vereist user gesture)
   if (typeof DeviceOrientationEvent.requestPermission === "function") {
-    const r = await DeviceOrientationEvent.requestPermission();
-    log("motion: " + r);
-    if (r !== "granted") return;
-  }
-
-  // 🧭 SAFE compass
-  window.addEventListener("deviceorientation", (e) => {
-
-    if (typeof e.alpha !== "number") {
-      dbg({ warning: "no alpha", event: e });
+    const res = await DeviceOrientationEvent.requestPermission();
+    if (res !== "granted") {
+      setStatus("Kompas geweigerd ❌");
       return;
     }
+  }
 
-    heading = 360 - e.alpha;
-    update();
+  // 🧭 Compass listener
+  window.addEventListener("deviceorientation", (e) => {
+
+    if (typeof e.alpha === "number") {
+      heading = 360 - e.alpha;
+      compassOK = true;
+    } else {
+      compassOK = false;
+    }
+
+    tryUpdate();
   });
 
   // 📍 GPS
   if (!navigator.geolocation) {
-    log("no GPS");
+    setStatus("Geen GPS API ❌");
     return;
   }
 
   navigator.geolocation.watchPosition(
-    p => {
-      pos = p.coords;
-      log("gps ok");
-      update();
+    pos => {
+      position = pos.coords;
+      gpsOK = true;
+      tryUpdate();
     },
-    e => dbg({ gpsError: e.message }),
-    { enableHighAccuracy:true }
+    err => {
+      gpsOK = false;
+      setStatus("GPS error: " + err.message);
+    },
+    { enableHighAccuracy: true }
   );
 
-  log("running");
+  setStatus("Wachten op GPS + kompas...");
 }
 
 // 📐 bearing
 function bearing(lat1, lon1, lat2, lon2) {
-  const toRad = x => x*Math.PI/180;
-  const toDeg = x => x*180/Math.PI;
+  const toRad = x => x * Math.PI / 180;
+  const toDeg = x => x * 180 / Math.PI;
 
-  const dLon = toRad(lon2-lon1);
+  const dLon = toRad(lon2 - lon1);
   lat1 = toRad(lat1);
   lat2 = toRad(lat2);
 
-  const y = Math.sin(dLon)*Math.cos(lat2);
-  const x = Math.cos(lat1)*Math.sin(lat2)
-          - Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLon);
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1)*Math.sin(lat2) -
+            Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLon);
 
-  return (toDeg(Math.atan2(y,x))+360)%360;
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
 
-// 🔄 update UI
-function update() {
-  if (!pos) return;
+// 📏 distance
+function distance(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = x => x * Math.PI / 180;
 
-  const b = bearing(pos.latitude,pos.longitude,target.lat,target.lon);
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat/2)**2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon/2)**2;
+
+  return Math.round(2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+}
+
+// 🔄 ONLY UPDATE WHEN READY
+function tryUpdate() {
+
+  debug({
+    gpsOK,
+    compassOK,
+    position: position ? "YES" : "NO",
+    heading: heading
+  });
+
+  if (!gpsOK || !compassOK || !position || heading === null) {
+    setStatus("Wachten op data...");
+    return;
+  }
+
+  const b = bearing(
+    position.latitude,
+    position.longitude,
+    target.lat,
+    target.lon
+  );
+
   const angle = b - heading;
 
   document.getElementById("arrow").style.transform =
     `rotate(${angle}deg)`;
 
-  dbg({
-    lat: pos.latitude,
-    lon: pos.longitude,
-    heading,
-    targetBearing: b
+  const dist = distance(
+    position.latitude,
+    position.longitude,
+    target.lat,
+    target.lon
+  );
+
+  setStatus("LIVE");
+
+  debug({
+    gpsOK,
+    compassOK,
+    lat: position.latitude.toFixed(6),
+    lon: position.longitude.toFixed(6),
+    heading: heading.toFixed(1),
+    bearing: b.toFixed(1),
+    distance: dist + "m"
   });
 }
-
 </script>
 
 </body>
