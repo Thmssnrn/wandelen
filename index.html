@@ -1,184 +1,130 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Pointer Debug</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pointer Debug</title>
 
-  <style>
-    body {
-      margin:0;
-      height:100vh;
-      display:flex;
-      flex-direction:column;
-      justify-content:center;
-      align-items:center;
-      background:#111;
-      color:white;
-      font-family:sans-serif;
-    }
-
-    #arrow {
-      font-size:90px;
-      transition: transform 0.15s linear;
-    }
-
-    button {
-      margin-top:20px;
-      padding:12px 20px;
-      font-size:16px;
-    }
-
-    #status {
-      margin-top:10px;
-      font-size:14px;
-      opacity:0.7;
-    }
-
-    #debug {
-      margin-top:15px;
-      font-size:12px;
-      opacity:0.85;
-      white-space:pre;
-      text-align:left;
-    }
-  </style>
+<style>
+body {
+  margin:0;
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  background:#111;
+  color:white;
+  font-family:sans-serif;
+}
+#arrow { font-size:90px; }
+#debug { font-size:12px; white-space:pre; margin-top:10px; }
+button { padding:12px; margin-top:10px; }
+</style>
 </head>
 
 <body>
 
 <div id="arrow">⬆️</div>
 <button onclick="init()">Start</button>
-<div id="status">Wacht op start...</div>
+<div id="status">idle</div>
 <div id="debug"></div>
 
 <script>
-const target = {
-  lat: 52.9586,
-  lon: 4.7593
-};
 
+const target = { lat: 52.9586, lon: 4.7593 };
+
+let pos = null;
 let heading = 0;
-let position = null;
 
-function setStatus(t) {
+function log(t) {
   document.getElementById("status").innerText = t;
 }
 
-function updateDebug(data) {
+function dbg(obj) {
   document.getElementById("debug").innerText =
-    `lat: ${data.lat ?? '-'}\n` +
-    `lon: ${data.lon ?? '-'}\n` +
-    `heading: ${data.heading ?? '-'}\n` +
-    `target: ${data.target ?? '-'}\n` +
-    `distance: ${data.distance ?? '-'} m`;
+    JSON.stringify(obj, null, 2);
 }
+
+// 🔥 HARD ERROR CATCH
+window.onerror = (m) => dbg({error:m});
 
 async function init() {
 
-  setStatus("Sensoren starten...");
+  log("init...");
 
-  // iOS kompas permissie
-  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-    const res = await DeviceOrientationEvent.requestPermission();
-    if (res !== 'granted') {
-      setStatus("Kompas geweigerd");
-      return;
-    }
+  // compass permission
+  if (typeof DeviceOrientationEvent.requestPermission === "function") {
+    const r = await DeviceOrientationEvent.requestPermission();
+    log("motion: " + r);
+    if (r !== "granted") return;
   }
 
-  // 🧭 Kompas
-  window.addEventListener('deviceorientation', (event) => {
-    if (event.alpha === null) return;
-    heading = 360 - event.alpha;
+  // 🧭 SAFE compass
+  window.addEventListener("deviceorientation", (e) => {
+
+    if (typeof e.alpha !== "number") {
+      dbg({ warning: "no alpha", event: e });
+      return;
+    }
+
+    heading = 360 - e.alpha;
     update();
-  }, true);
+  });
 
   // 📍 GPS
+  if (!navigator.geolocation) {
+    log("no GPS");
+    return;
+  }
+
   navigator.geolocation.watchPosition(
-    pos => {
-      position = pos.coords;
-      setStatus("GPS actief");
+    p => {
+      pos = p.coords;
+      log("gps ok");
       update();
     },
-    err => setStatus("GPS fout: " + err.message),
-    { enableHighAccuracy: true }
+    e => dbg({ gpsError: e.message }),
+    { enableHighAccuracy:true }
   );
 
-  setStatus("Sensoren actief");
+  log("running");
 }
 
-// 📐 Bearing
+// 📐 bearing
 function bearing(lat1, lon1, lat2, lon2) {
-  const toRad = x => x * Math.PI / 180;
-  const toDeg = x => x * 180 / Math.PI;
+  const toRad = x => x*Math.PI/180;
+  const toDeg = x => x*180/Math.PI;
 
-  const dLon = toRad(lon2 - lon1);
+  const dLon = toRad(lon2-lon1);
   lat1 = toRad(lat1);
   lat2 = toRad(lat2);
 
-  const y = Math.sin(dLon) * Math.cos(lat2);
-  const x = Math.cos(lat1)*Math.sin(lat2) -
-            Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLon);
+  const y = Math.sin(dLon)*Math.cos(lat2);
+  const x = Math.cos(lat1)*Math.sin(lat2)
+          - Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLon);
 
-  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+  return (toDeg(Math.atan2(y,x))+360)%360;
 }
 
-// 📏 Afstand
-function distance(lat1, lon1, lat2, lon2) {
-  const R = 6371000;
-  const toRad = x => x * Math.PI / 180;
-
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-
-  const a =
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-  return Math.round(R * c);
-}
-
-// 🔄 Update UI
+// 🔄 update UI
 function update() {
-  if (!position) return;
+  if (!pos) return;
 
-  const targetBearing = bearing(
-    position.latitude,
-    position.longitude,
-    target.lat,
-    target.lon
-  );
+  const b = bearing(pos.latitude,pos.longitude,target.lat,target.lon);
+  const angle = b - heading;
 
-  const angle = targetBearing - heading;
+  document.getElementById("arrow").style.transform =
+    `rotate(${angle}deg)`;
 
-  document.getElementById("arrow")
-    .style.transform = `rotate(${angle}deg)`;
-
-  const dist = distance(
-    position.latitude,
-    position.longitude,
-    target.lat,
-    target.lon
-  );
-
-  updateDebug({
-    lat: position.latitude.toFixed(6),
-    lon: position.longitude.toFixed(6),
-    heading: heading.toFixed(1),
-    target: targetBearing.toFixed(1),
-    distance: dist
+  dbg({
+    lat: pos.latitude,
+    lon: pos.longitude,
+    heading,
+    targetBearing: b
   });
 }
-</script>
 
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js');
-}
 </script>
 
 </body>
