@@ -56,7 +56,7 @@ async function enableCompass() {
 
 // 🔄 Pijl draaien
 function updateArrow() {
-  const rotation = currentBearing - currentHeading;
+  const rotation = currentHeading - currentBearing;
 
   document.getElementById("arrow").style.transform =
     `rotate(${rotation}deg)`;
