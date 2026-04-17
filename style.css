@@ -6,14 +6,14 @@ body {
   text-align: center;
 }
 
-#startButton {
-  margin-top: 40px;
+#startButton, #gpxUpload {
+  margin: 20px;
   padding: 15px;
   font-size: 18px;
 }
 
 #arrow {
   font-size: 120px;
-  margin-top: 100px;
+  margin-top: 50px;
   transition: transform 0.1s linear;
 }
