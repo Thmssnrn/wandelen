@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gpx-kompas-v1';
+const CACHE_NAME = 'gpx-kompas-v2';
 
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -8,8 +8,7 @@ self.addEventListener('install', e => {
         '/index.html',
         '/style.css',
         '/app.js',
-        '/manifest.json',
-        '/route.gpx'
+        '/manifest.json'
       ])
     )
   );
