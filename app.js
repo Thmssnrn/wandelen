@@ -74,7 +74,8 @@ function updateArrow() {
   if (!currentPosition || gpxPoints.length === 0) return;
   const target = nextGPXPoint(currentPosition, gpxPoints);
   currentBearing = getBearing(currentPosition.lat, currentPosition.lon, target.lat, target.lon);
-  const rotation =  720 + currentHeading - currentBearing;
+  const rotation = currentHeading - currentBearing;
+  rotation = ((rotation + 540) % 360) - 180;
   document.getElementById("arrow").style.transform =
     `rotate(${rotation % 360}deg)`;
 }
