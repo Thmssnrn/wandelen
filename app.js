@@ -70,14 +70,16 @@ async function enableCompass() {
 }
 
 // 🔄 Pijl draaien
+let displayedRotation = 0;
 function updateArrow() {
   if (!currentPosition || gpxPoints.length === 0) return;
   const target = nextGPXPoint(currentPosition, gpxPoints);
   currentBearing = getBearing(currentPosition.lat, currentPosition.lon, target.lat, target.lon);
-  const rotation = currentHeading - currentBearing;
-  rotation = ((rotation + 540) % 360) - 180;
+  const delta = currentHeading - currentBearing;
+  delta = ((desired + 540) % 360) - 180; // normaliseer naar -180..180 (kortste richting)
+  displayedRotation += delta;
   document.getElementById("arrow").style.transform =
-    `rotate(${rotation % 360}deg)`;
+    `rotate(${displayedRotation}deg)`;
 }
 
 // ▶️ Start knop
