@@ -74,9 +74,9 @@ function updateArrow() {
   if (!currentPosition || gpxPoints.length === 0) return;
   const target = nextGPXPoint(currentPosition, gpxPoints);
   currentBearing = getBearing(currentPosition.lat, currentPosition.lon, target.lat, target.lon);
-  const rotation = currentBearing - currentHeading;
+  const rotation =  currentHeading - currentBearing;
   document.getElementById("arrow").style.transform =
-    `rotate(${-rotation}deg)`; // min-teken correctie
+    `rotate(${rotation % 360}deg)`;
 }
 
 // ▶️ Start knop
