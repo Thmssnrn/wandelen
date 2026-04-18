@@ -9,7 +9,7 @@ let displayedRotation = 0;
 let currentBearing = 0;
 
 // Snap buffer in meters
-const SNAP_RADIUS_METERS = 5;
+const SNAP_RADIUS_METERS = 10;
 
 // =========================
 // GPX UPLOAD
@@ -238,9 +238,7 @@ function updateArrow() {
   const targetRotation = currentBearing - currentHeading;
 
   // smooth rotation
-  const smooth = 0.15;
-  let delta = ((targetRotation - displayedRotation + 540) % 360) - 180;
-  displayedRotation += delta * smooth;
+  displayedRotation += ((targetRotation - displayedRotation + 540) % 360) - 180;
 
   document.getElementById("arrow").style.transform =
     `rotate(${displayedRotation}deg)`;
