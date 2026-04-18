@@ -341,7 +341,8 @@ function updateDebug(target) {
 
     <b>Routing</b><br>
     bearing: ${currentBearing.toFixed(2)}°<br>
-    rotatie: ${displayedRotation.toFixed(2)}°<br><br>
+    rotatie: ${displayedRotation.toFixed(2)}°<br>
+    segment: ${currentSegmentIndex}<br><br>
 
     <b>Target</b><br>
     ${target.lat.toFixed(6)}, ${target.lon.toFixed(6)}<br><br>
