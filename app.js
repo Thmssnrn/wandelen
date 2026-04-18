@@ -134,7 +134,7 @@ function updateArrow() {
   currentBearing = getBearing(currentPosition.lat, currentPosition.lon, target.lat, target.lon);
 
   // Vloeiende rotatie
-  let targetRotation = currentHeading - currentBearing;
+  let targetRotation = -currentHeading - currentBearing;
   let delta = targetRotation - displayedRotation;
   displayedRotation += ((delta + 540) % 360) - 180;
   document.getElementById("arrow").style.transform = `rotate(${displayedRotation}deg)`;
