@@ -34,15 +34,12 @@ body {
 
 /* Pijl groter en afgerond */
 #arrow {
-  font-size: 200px; /* groter */
-  margin-top: 50px;
-  transition: transform 0.1s linear;
+  font-size: 100px;
+  padding: 20px;
   display: inline-block;
-  border: 6px solid white;      /* rand voor “afgeronde” look */
-  border-radius: 50%;           /* ronde vorm */
-  padding: 40px;
-  line-height: 1;
-  background: rgba(255,255,255,0.05);
+  background-color: rgba(255, 255, 255, 0.2);
+  text-align: center;
+  font-family: ui-sans-serif, sans-serif;
 }
 
 /* Rotatie label boven de pijl */
