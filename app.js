@@ -144,11 +144,11 @@ function updateArrow() {
   document.getElementById("distance").innerText = `Restafstand: ${rest.toFixed(2)} km`;
 
   // debug-update
-  updateDebugInfo(currentBearing, currentHeading, displayedRotation);
+  updateDebugInfo();
 }
 
 // debug-update
-function updateDebugInfo(currentBearing, currentHeading, displayedRotation) {
+function updateDebugInfo() {
   if (!currentPosition || gpxPoints.length === 0) return;
 
   // Vind dichtstbijzijnde segment en projectiepunt
