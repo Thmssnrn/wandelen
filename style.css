@@ -25,7 +25,7 @@ body {
 }
 
 #arrow {
-  font-size: 200px;
+  font-size: 300px; /* erg groot */
   padding: 20px;
   display: inline-block;
   text-align: center;
