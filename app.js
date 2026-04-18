@@ -259,29 +259,69 @@ function distanceMeters(lat1, lon1, lat2, lon2) {
 function updateArrow() {
   if (!currentPosition || gpxPoints.length === 0) return;
 
+  // Bepaal het "huidige target"
   const target = nextGPXPoint(currentPosition, gpxPoints);
   if (!target) return;
 
+  // ---------------------------
+  // LOOK-AHEAD LOGICA
+  // ---------------------------
+  let bearingTarget = target;
+
+  if (currentSegmentIndex < gpxPoints.length - 1) {
+    const nextNext = gpxPoints[currentSegmentIndex + 1];
+
+    const distToNext = distanceMeters(
+      currentPosition.lat,
+      currentPosition.lon,
+      target.lat,
+      target.lon
+    );
+
+    // Hoeveel vooruit kijken richting volgende segment
+    const lookAheadMeters = Math.max(0, 15 - distToNext);
+
+    if (lookAheadMeters > 0) {
+      const dx = nextNext.lon - target.lon;
+      const dy = nextNext.lat - target.lat;
+      const segmentDist = distanceMeters(target.lat, target.lon, nextNext.lat, nextNext.lon);
+
+      const t = Math.min(1, lookAheadMeters / segmentDist);
+
+      bearingTarget = {
+        lat: target.lat + t * dy,
+        lon: target.lon + t * dx
+      };
+    }
+  }
+
+  // ---------------------------
+  // BEREKEN BEARING
+  // ---------------------------
   currentBearing = getBearing(
     currentPosition.lat,
     currentPosition.lon,
-    target.lat,
-    target.lon
+    bearingTarget.lat,
+    bearingTarget.lon
   );
 
+  // Richting pijl aanpassen op basis van compass
   const targetRotation = currentBearing - currentHeading;
   displayedRotation = ((targetRotation + 540) % 360) - 180;
 
   document.getElementById("arrow").style.transform = `rotate(${displayedRotation}deg)`;
   document.getElementById("arrowRotation").innerText = `${Math.round(-displayedRotation)}°`;
 
+  // ---------------------------
+  // RESTAFSTAND
+  // ---------------------------
   const rest = remainingDistanceKm(currentPosition, gpxPoints);
   document.getElementById("distance").innerText =
-    rest >= .995 ? // Grens bij 995 m (groter -> 1,0 km; kleiner -> 990 m)
+    rest >= .995 ?
     `Restafstand: ${Math.round(rest * 10) / 10} km`.replace('.', ',') :
     `Restafstand: ${Math.round(rest * 100) * 10} m`.replace('.', ',');
 
-  updateDebug(target);
+  updateDebug(bearingTarget);
 }
 
 // DEBUG
