@@ -36,8 +36,6 @@ const saved = localStorage.getItem("gpxPoints");
 if (saved) gpxPoints = JSON.parse(saved);
 
 // Start compass
-document.getElementById("startBtn").addEventListener("click", startCompass);
-
 function startCompass() {
   if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
     DeviceOrientationEvent.requestPermission().then(state => {
@@ -205,7 +203,7 @@ function updateDebugInfo() {
 
 // ▶️ Start knop
 document.getElementById("startButton").addEventListener("click", async () => {
-  await enableCompass();
+  await startCompass();
 });
 
 // 📦 Service worker
