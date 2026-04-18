@@ -6,42 +6,67 @@ body {
   text-align: center;
 }
 
-#startButton, #gpxUpload {
-  margin: 20px;
-  padding: 15px;
-  font-size: 18px;
+/* Container voor knoppen naast elkaar */
+#controls {
+  display: flex;
+  justify-content: center;
+  gap: 20px;  /* ruimte tussen knoppen */
+  margin: 20px 0;
+}
+
+/* Knoppen subtieler maken */
+#startButton,
+#gpxUpload {
+  padding: 12px 20px;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  background: #333;
+  color: #fff;
   cursor: pointer;
+  transition: background 0.2s;
 }
 
-#arrowContainer {
-  position: relative;
-  display: inline-block;
-  margin-top: 50px;
+#startButton:hover,
+#gpxUpload:hover {
+  background: #555;
 }
 
+/* Pijl groter en afgerond */
 #arrow {
-  font-size: 120px;
+  font-size: 200px; /* groter */
+  margin-top: 50px;
   transition: transform 0.1s linear;
+  display: inline-block;
+  border: 6px solid white;      /* rand voor “afgeronde” look */
+  border-radius: 50%;           /* ronde vorm */
+  padding: 40px;
+  line-height: 1;
+  background: rgba(255,255,255,0.05);
 }
 
+/* Rotatie label boven de pijl */
 #arrowRotation {
-  position: absolute;
-  top: -30px;
-  width: 100%;
-  text-align: center;
   font-size: 24px;
-  color: white;
+  margin-top: 10px;
 }
 
+/* Restafstand onder de pijl */
 #distance {
   margin-top: 20px;
   font-size: 24px;
 }
 
+/* Debug info klein en subtiel */
 #debug {
   text-align: left;
-  margin: 20px auto;
+  margin: 20px;
   font-size: 14px;
-  color: white;
-  max-width: 500px;
+  color: #ccc;
+  max-width: 90%;
+  margin-left: auto;
+  margin-right: auto;
+  background: rgba(255,255,255,0.05);
+  padding: 10px;
+  border-radius: 8px;
 }
