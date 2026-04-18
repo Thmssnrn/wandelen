@@ -8,18 +8,18 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <input type="file" id="gpxUpload" accept=".gpx">
-  <button id="startButton">Start kompas</button>
-
-  <!-- Arrow container met rotatie -->
-  <div id="arrowContainer">
-    <div id="arrowRotation">0°</div>
-    <div id="arrow">↑</div>
+  
+  <div id="controls">
+    <input type="file" id="gpxUpload" accept=".gpx">
+    <button id="startButton">Start kompas</button>
   </div>
 
+  <div id="arrowRotation"></div>
+  <div id="arrow">↑</div>
   <div id="distance">Restafstand: 0 km</div>
-  <div id="debug"></div>
 
+  <div id="debug"></div>
+  
   <script src="./app.js"></script>
 </body>
 </html>
