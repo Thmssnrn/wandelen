@@ -11,9 +11,8 @@ let currentBearing = 0;
 // Snap buffer in meters
 const SNAP_RADIUS_METERS = 10;
 
-// =========================
+
 // GPX UPLOAD
-// =========================
 document.getElementById("gpxUpload").addEventListener("change", function(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -43,9 +42,7 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
 const saved = localStorage.getItem("gpxPoints");
 if (saved) gpxPoints = JSON.parse(saved);
 
-// =========================
 // START
-// =========================
 async function startCompass() {
   if (
     typeof DeviceOrientationEvent !== "undefined" &&
@@ -66,9 +63,7 @@ async function startCompass() {
   });
 }
 
-// =========================
 // COMPASS
-// =========================
 function handleOrientation(event) {
   let heading = null;
 
@@ -90,9 +85,7 @@ function handleOrientation(event) {
   updateArrow();
 }
 
-// =========================
 // GPS
-// =========================
 function onGPS(pos) {
   currentPosition = {
     lat: pos.coords.latitude,
@@ -102,9 +95,7 @@ function onGPS(pos) {
   updateArrow();
 }
 
-// =========================
 // BEARING
-// =========================
 function getBearing(lat1, lon1, lat2, lon2) {
   const φ1 = lat1 * Math.PI/180;
   const φ2 = lat2 * Math.PI/180;
@@ -118,9 +109,7 @@ function getBearing(lat1, lon1, lat2, lon2) {
   return (Math.atan2(y, x)*180/Math.PI + 360) % 360;
 }
 
-// =========================
 // GPX: VOLGENDE TARGET (SEGMENT-GEBASEERD + SNAP)
-// =========================
 function nextGPXPoint(pos, points) {
   if (points.length === 0) return null;
 
@@ -160,9 +149,7 @@ function nextGPXPoint(pos, points) {
   return points[targetIndex];
 }
 
-// =========================
 // REMAINING DISTANCE VANAF PROJECTIE OP SEGMENT
-// =========================
 function remainingDistanceKm(pos, points) {
   if (points.length === 0) return 0;
 
@@ -203,9 +190,7 @@ function remainingDistanceKm(pos, points) {
   return dist / 1000; // km
 }
 
-// =========================
 // HULPFUNCTIE: Afstand in meters
-// =========================
 function distanceMeters(lat1, lon1, lat2, lon2) {
   const R = 6371000; // aarde radius in meters
   const φ1 = lat1 * Math.PI / 180;
@@ -221,9 +206,7 @@ function distanceMeters(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-// =========================
 // UPDATE ARROW
-// =========================
 function updateArrow() {
   if (!currentPosition || gpxPoints.length === 0) return;
 
@@ -238,32 +221,23 @@ function updateArrow() {
   );
 
   const targetRotation = currentBearing - currentHeading;
+  displayedRotation = ((targetRotation + 540) % 360) - 180;
 
-  // smooth rotation
-  displayedRotation += ((targetRotation - displayedRotation + 540) % 360) - 180;
-
-  document.getElementById("arrow").style.transform =
-    `rotate(${displayedRotation}deg)`;
-
-  // Rotatie boven pijl
-  document.getElementById("arrowRotation").innerText =
-    `${Math.round(-displayedRotation)}°`;
-
-  // Haptische feedback
-  if ('vibrate' in navigator && Math.abs(displayedRotation) < 2) {
-    navigator.vibrate(100);
-  }
+  document.getElementById("arrow").style.transform = `rotate(${displayedRotation}deg)`;
+  document.getElementById("arrowRotation").innerText = 
+    Math.abs(displayedRotation) < 2.5 ?
+    "0°" : `${Math.round(-displayedRotation)}°`;
 
   const rest = remainingDistanceKm(currentPosition, gpxPoints);
   document.getElementById("distance").innerText =
-    `Restafstand: ${rest.toFixed(2)} km`;
+    rest >= 1000 ?
+    `Restafstand: ${Math.round(rest * 10) / 10} km`.replace('.', ',') :
+    `Restafstand: ${Math.round(rest * 100) * 10} m`.replace('.', ',');
 
   updateDebug(target);
 }
 
-// =========================
 // DEBUG
-// =========================
 function updateDebug(target) {
   if (!currentPosition || !target) return;
 
@@ -290,14 +264,11 @@ function updateDebug(target) {
   `;
 }
 
-// =========================
 // START BUTTON
-// =========================
 document.getElementById("startButton").addEventListener("click", startCompass);
 
-// =========================
+
 // SERVICE WORKER
-// =========================
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("service-worker.js");
 }
