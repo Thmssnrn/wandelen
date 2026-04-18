@@ -142,6 +142,46 @@ function updateArrow() {
   // Restafstand
   const rest = remainingDistanceKm(currentPosition, gpxPoints);
   document.getElementById("distance").innerText = `Restafstand: ${rest.toFixed(2)} km`;
+
+  // debug-update
+  updateDebugInfo();
+}
+
+// debug-update
+function updateDebugInfo() {
+  if (!currentPosition || gpxPoints.length === 0) return;
+
+  // Vind dichtstbijzijnde segment en projectiepunt
+  let minDist = Infinity;
+  let segmentIndex = 0;
+  let projPoint = gpxPoints[0];
+  for (let i = 0; i < gpxPoints.length - 1; i++) {
+    const A = gpxPoints[i];
+    const B = gpxPoints[i+1];
+    const dx = B.lon - A.lon;
+    const dy = B.lat - A.lat;
+    if (dx === 0 && dy === 0) continue;
+    const t = ((currentPosition.lat - A.lat) * dy + (currentPosition.lon - A.lon) * dx) / (dx*dx + dy*dy);
+    const tClamped = Math.max(0, Math.min(1, t));
+    const proj = { lat: A.lat + tClamped * dy, lon: A.lon + tClamped * dx };
+    const dist = Math.hypot(currentPosition.lat - proj.lat, currentPosition.lon - proj.lon);
+    if (dist < minDist) {
+      minDist = dist;
+      segmentIndex = i;
+      projPoint = proj;
+    }
+  }
+
+  const debugDiv = document.getElementById("debug");
+  debugDiv.innerHTML = `
+    <b>Debug Info:</b><br>
+    Huidige positie: lat ${currentPosition.lat.toFixed(6)}, lon ${currentPosition.lon.toFixed(6)}<br>
+    Dichtstbijzijnde segment: index ${segmentIndex} → ${segmentIndex+1}<br>
+    Segmentpunten: A(${gpxPoints[segmentIndex].lat.toFixed(6)},${gpxPoints[segmentIndex].lon.toFixed(6)}) 
+                    B(${gpxPoints[segmentIndex+1].lat.toFixed(6)},${gpxPoints[segmentIndex+1].lon.toFixed(6)})<br>
+    Projectiepunt op segment: lat ${projPoint.lat.toFixed(6)}, lon ${projPoint.lon.toFixed(6)}<br>
+    Restafstand: ${remainingDistanceKm(currentPosition, gpxPoints).toFixed(3)} km
+  `;
 }
 
 // ▶️ Start knop
