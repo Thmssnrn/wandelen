@@ -119,10 +119,47 @@ function getBearing(lat1, lon1, lat2, lon2) {
 }
 
 // =========================
-// DISTANCE
+// GPX: VOLGENDE TARGET (SEGMENT-GEBASEERD + SNAP)
 // =========================
+function nextGPXPoint(pos, points) {
+  if (points.length === 0) return null;
+
+  let minDist = Infinity;
+  let targetIndex = points.length - 1; // fallback naar laatste punt
+
+  // Vind dichtstbijzijnde segment
+  for (let i = 0; i < points.length - 1; i++) {
+    const A = points[i];
+    const B = points[i + 1];
+
+    // projectie van huidige positie op segment A→B
+    const dx = B.lon - A.lon;
+    const dy = B.lat - A.lat;
+    const t = ((pos.lat - A.lat) * dy + (pos.lon - A.lon) * dx) / (dx*dx + dy*dy);
+    const tClamped = Math.max(0, Math.min(1, t));
+    const proj = { lat: A.lat + tClamped*dy, lon: A.lon + tClamped*dx };
+
+    const d = distanceMeters(pos.lat, pos.lon, proj.lat, proj.lon);
+
+    if (d < minDist) {
+      minDist = d;
+      targetIndex = i + 1; // altijd het tweede punt van segment
+    }
+  }
+
+  // Buffer / snap: spring naar volgend punt als we dichtbij het huidige target zijn
+  if (targetIndex < points.length - 1) {
+    const target = points[targetIndex];
+    if (distanceMeters(pos.lat, pos.lon, target.lat, target.lon) <= SNAP_RADIUS_METERS) {
+      targetIndex += 1;
+    }
+  }
+
+  return points[targetIndex];
+}
+
 // =========================
-// REMAINING DISTANCE MET PROJECTIE OP SEGMENT
+// REMAINING DISTANCE VANAF PROJECTIE OP SEGMENT
 // =========================
 function remainingDistanceKm(pos, points) {
   if (points.length === 0) return 0;
@@ -165,75 +202,21 @@ function remainingDistanceKm(pos, points) {
 }
 
 // =========================
-// NEXT GPX POINT MET SEGMENT-LOGICA EN SNAP
+// HULPFUNCTIE: Afstand in meters
 // =========================
-function nextGPXPoint(pos, points) {
-  if (points.length === 0) return null;
+function distanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // aarde radius in meters
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
 
-  let minDist = Infinity;
-  let targetIndex = points.length - 1; // fallback naar laatste punt
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
-  // Vind dichtstbijzijnde segment
-  for (let i = 0; i < points.length - 1; i++) {
-    const A = points[i];
-    const B = points[i + 1];
-
-    // projectie van huidige positie op segment A→B
-    const dx = B.lon - A.lon;
-    const dy = B.lat - A.lat;
-    const t = ((pos.lat - A.lat) * dy + (pos.lon - A.lon) * dx) / (dx*dx + dy*dy);
-    const tClamped = Math.max(0, Math.min(1, t));
-    const proj = { lat: A.lat + tClamped*dy, lon: A.lon + tClamped*dx };
-
-    const d = distanceMeters(pos.lat, pos.lon, proj.lat, proj.lon);
-
-    if (d < minDist) {
-      minDist = d;
-      targetIndex = i + 1; // altijd het tweede punt van segment
-    }
-  }
-
-  // Buffer / snap: spring naar volgend punt als we dichtbij het huidige target zijn
-  if (targetIndex < points.length - 1) {
-    const target = points[targetIndex];
-    if (distanceMeters(pos.lat, pos.lon, target.lat, target.lon) <= SNAP_RADIUS_METERS) {
-      targetIndex += 1;
-    }
-  }
-
-  return points[targetIndex];
-}
-
-// =========================
-// REMAINING DISTANCE
-// =========================
-function remainingDistanceKm(pos, points) {
-  let dist = 0;
-
-  if (points.length === 0) return dist;
-
-  let minIndex = 0;
-  let minDist = Infinity;
-
-  for (let i = 0; i < points.length - 1; i++) {
-    const d = distanceMeters(pos.lat, pos.lon, points[i].lat, points[i].lon);
-
-    if (d < minDist) {
-      minDist = d;
-      minIndex = i;
-    }
-  }
-
-  for (let i = minIndex; i < points.length - 1; i++) {
-    dist += distanceMeters(
-      points[i].lat,
-      points[i].lon,
-      points[i+1].lat,
-      points[i+1].lon
-    );
-  }
-
-  return dist / 1000;
+  return R * c;
 }
 
 // =========================
