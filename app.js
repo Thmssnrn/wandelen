@@ -8,8 +8,8 @@ let hasOffset = false;
 let displayedRotation = 0;
 let currentBearing = 0;
 
-let lastPosition = null;
-let gpsHeading = 0;
+// Snap buffer in meters
+const SNAP_RADIUS_METERS = 5;
 
 // =========================
 // GPX UPLOAD
@@ -67,7 +67,7 @@ async function startCompass() {
 }
 
 // =========================
-// COMPASS (iOS FIX)
+// COMPASS
 // =========================
 function handleOrientation(event) {
   let heading = null;
@@ -87,30 +87,17 @@ function handleOrientation(event) {
 
   currentHeading = (heading - headingOffset + 360) % 360;
 
-  updateArrow(); // 🔥 belangrijk!
+  updateArrow();
 }
 
 // =========================
 // GPS
 // =========================
 function onGPS(pos) {
-  const newPos = {
+  currentPosition = {
     lat: pos.coords.latitude,
     lon: pos.coords.longitude
   };
-
-  // GPS heading (fallback)
-  if (lastPosition) {
-    gpsHeading = getBearing(
-      lastPosition.lat,
-      lastPosition.lon,
-      newPos.lat,
-      newPos.lon
-    );
-  }
-
-  lastPosition = newPos;
-  currentPosition = newPos;
 
   updateArrow();
 }
@@ -132,7 +119,7 @@ function getBearing(lat1, lon1, lat2, lon2) {
 }
 
 // =========================
-// DISTANCE (meters)
+// DISTANCE
 // =========================
 function distanceMeters(lat1, lon1, lat2, lon2) {
   const R = 6371000;
@@ -149,43 +136,33 @@ function distanceMeters(lat1, lon1, lat2, lon2) {
 }
 
 // =========================
-// NEXT GPX POINT (jouw logica + fix)
+// NEXT GPX POINT MET SNAP BUFFER
 // =========================
 function nextGPXPoint(pos, points) {
   if (points.length === 0) return null;
 
-  let minDist = Infinity;
-  let target = points[points.length - 1];
-
   const scale = Math.cos(pos.lat * Math.PI/180);
 
   for (let i = 0; i < points.length - 1; i++) {
-    const A = points[i];
-    const B = points[i + 1];
+    const target = points[i + 1];
+    const d = distanceMeters(pos.lat, pos.lon, target.lat, target.lon);
 
-    const dx = (B.lon - A.lon) * scale;
-    const dy = (B.lat - A.lat);
-
-    const t =
-      ((pos.lat - A.lat)*dy + (pos.lon - A.lon)*dx) /
-      (dx*dx + dy*dy);
-
-    const tClamped = Math.max(0, Math.min(1, t));
-
-    const proj = {
-      lat: A.lat + tClamped*dy,
-      lon: A.lon + tClamped*dx
-    };
-
-    const dist = distanceMeters(pos.lat, pos.lon, proj.lat, proj.lon);
-
-    if (dist < minDist) {
-      minDist = dist;
-      target = B;
+    if (d <= SNAP_RADIUS_METERS) {
+      return points[i + 2] || target; // snap naar volgende
     }
   }
 
-  return target;
+  // fallback: het dichtstbijzijnde punt
+  let minDist = Infinity;
+  let closest = points[points.length - 1];
+  for (const p of points) {
+    const d = distanceMeters(pos.lat, pos.lon, p.lat, p.lon);
+    if (d < minDist) {
+      minDist = d;
+      closest = p;
+    }
+  }
+  return closest;
 }
 
 // =========================
@@ -200,12 +177,7 @@ function remainingDistanceKm(pos, points) {
   let minDist = Infinity;
 
   for (let i = 0; i < points.length - 1; i++) {
-    const d = distanceMeters(
-      pos.lat,
-      pos.lon,
-      points[i].lat,
-      points[i].lon
-    );
+    const d = distanceMeters(pos.lat, pos.lon, points[i].lat, points[i].lon);
 
     if (d < minDist) {
       minDist = d;
@@ -241,18 +213,24 @@ function updateArrow() {
     target.lon
   );
 
-  // 🔥 fallback als kompas niet werkt
-  const heading = hasOffset ? currentHeading : gpsHeading;
+  const targetRotation = currentBearing - currentHeading;
 
-  const targetRotation = currentBearing - heading;
-
-  // smooth
+  // smooth rotation
   const smooth = 0.15;
   let delta = ((targetRotation - displayedRotation + 540) % 360) - 180;
   displayedRotation += delta * smooth;
 
   document.getElementById("arrow").style.transform =
     `rotate(${displayedRotation}deg)`;
+
+  // Rotatie boven pijl
+  document.getElementById("arrowRotation").innerText =
+    `${Math.round(displayedRotation)}°`;
+
+  // Haptische feedback
+  if ('vibrate' in navigator && Math.abs(displayedRotation) < 2) {
+    navigator.vibrate(100);
+  }
 
   const rest = remainingDistanceKm(currentPosition, gpxPoints);
   document.getElementById("distance").innerText =
@@ -262,22 +240,21 @@ function updateArrow() {
 }
 
 // =========================
-// DEBUG (volledig terug)
+// DEBUG
 // =========================
 function updateDebug(target) {
+  if (!currentPosition || !target) return;
+
   const debugDiv = document.getElementById("debug");
 
   debugDiv.innerHTML = `
     <b>Positie</b><br>
-    ${currentPosition?.lat?.toFixed(6)}, ${currentPosition?.lon?.toFixed(6)}<br><br>
+    ${currentPosition.lat.toFixed(6)}, ${currentPosition.lon.toFixed(6)}<br><br>
 
     <b>Kompas</b><br>
     heading: ${currentHeading.toFixed(2)}°<br>
     offset: ${headingOffset.toFixed(2)}<br>
     hasOffset: ${hasOffset}<br><br>
-
-    <b>GPS heading (fallback)</b><br>
-    ${gpsHeading.toFixed(2)}°<br><br>
 
     <b>Routing</b><br>
     bearing: ${currentBearing.toFixed(2)}°<br>
