@@ -10,9 +10,16 @@
 <body>
   <input type="file" id="gpxUpload" accept=".gpx">
   <button id="startButton">Start kompas</button>
-  <div id="arrow">↑</div>
+
+  <!-- Arrow container met rotatie -->
+  <div id="arrowContainer">
+    <div id="arrowRotation">0°</div>
+    <div id="arrow">↑</div>
+  </div>
+
   <div id="distance">Restafstand: 0 km</div>
-  <div id="debug" style="text-align:left; margin:20px; font-size:14px; color: white;"></div>
+  <div id="debug"></div>
+
   <script src="./app.js"></script>
 </body>
 </html>
