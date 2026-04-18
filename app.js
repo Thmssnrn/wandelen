@@ -180,7 +180,10 @@ function updateDebugInfo() {
     Segmentpunten: A(${gpxPoints[segmentIndex].lat.toFixed(6)},${gpxPoints[segmentIndex].lon.toFixed(6)}) 
                     B(${gpxPoints[segmentIndex+1].lat.toFixed(6)},${gpxPoints[segmentIndex+1].lon.toFixed(6)})<br>
     Projectiepunt op segment: lat ${projPoint.lat.toFixed(6)}, lon ${projPoint.lon.toFixed(6)}<br>
-    Restafstand: ${remainingDistanceKm(currentPosition, gpxPoints).toFixed(3)} km
+    Restafstand: ${remainingDistanceKm(currentPosition, gpxPoints).toFixed(3)} km<br>
+    CurrentBearing: ${getBearing(currentPosition.lat, currentPosition.lon, target.lat, target.lon)}<br>
+    DisplayedRotation: ${displayedRotation}<br>
+    CurrentHeading: ${currentHeading}
   `;
 }
 
