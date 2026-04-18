@@ -125,14 +125,13 @@ function nextGPXPoint(pos, points) {
   if (points.length === 0) return null;
 
   let minDist = Infinity;
-  let targetIndex = points.length - 1; // fallback naar laatste punt
+  let targetIndex = points.length - 1; // fallback: laatste punt
 
-  // Vind dichtstbijzijnde segment
+  // Vind het dichtstbijzijnde segment
   for (let i = 0; i < points.length - 1; i++) {
     const A = points[i];
     const B = points[i + 1];
 
-    // projectie van huidige positie op segment A→B
     const dx = B.lon - A.lon;
     const dy = B.lat - A.lat;
     const t = ((pos.lat - A.lat) * dy + (pos.lon - A.lon) * dx) / (dx*dx + dy*dy);
@@ -143,17 +142,20 @@ function nextGPXPoint(pos, points) {
 
     if (d < minDist) {
       minDist = d;
-      targetIndex = i + 1; // altijd het tweede punt van segment
+      targetIndex = i + 1; // altijd het **tweede punt van het segment**
     }
   }
 
-  // Buffer / snap: spring naar volgend punt als we dichtbij het huidige target zijn
+  // Pas snap buffer toe: als we dichtbij het **huidige target** zijn, spring naar **het volgende segment**
   if (targetIndex < points.length - 1) {
     const target = points[targetIndex];
     if (distanceMeters(pos.lat, pos.lon, target.lat, target.lon) <= SNAP_RADIUS_METERS) {
       targetIndex += 1;
     }
   }
+
+  // Veiligheid: index nooit buiten array
+  if (targetIndex >= points.length) targetIndex = points.length - 1;
 
   return points[targetIndex];
 }
