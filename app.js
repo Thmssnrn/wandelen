@@ -7,6 +7,7 @@ let hasOffset = false;
 
 let displayedRotation = 0;
 let currentBearing = 0;
+let currentSegmentIndex = 0;
 
 // Snap buffer in meters
 const SNAP_RADIUS_METERS = 10;
@@ -32,6 +33,7 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
     }
 
     localStorage.setItem("gpxPoints", JSON.stringify(gpxPoints));
+    currentSegmentIndex = 0;
     alert(`GPX geladen met ${gpxPoints.length} punten`);
   };
 
@@ -114,39 +116,86 @@ function nextGPXPoint(pos, points) {
   if (points.length === 0) return null;
 
   let minDist = Infinity;
-  let targetIndex = points.length - 1; // fallback: laatste punt
+  let bestIndex = currentSegmentIndex;
 
-  // Vind het dichtstbijzijnde segment
-  for (let i = 0; i < points.length - 1; i++) {
+  const BACKWARD_WINDOW = 10;
+  const FORWARD_WINDOW = 30;
+
+  const start = Math.max(0, currentSegmentIndex - BACKWARD_WINDOW);
+  const end = Math.min(points.length - 1, currentSegmentIndex + FORWARD_WINDOW);
+
+  // Zoek lokaal
+  for (let i = start; i < end; i++) {
     const A = points[i];
     const B = points[i + 1];
 
     const dx = B.lon - A.lon;
     const dy = B.lat - A.lat;
+
     const t = ((pos.lat - A.lat) * dy + (pos.lon - A.lon) * dx) / (dx*dx + dy*dy);
     const tClamped = Math.max(0, Math.min(1, t));
-    const proj = { lat: A.lat + tClamped*dy, lon: A.lon + tClamped*dx };
+
+    const proj = {
+      lat: A.lat + tClamped * dy,
+      lon: A.lon + tClamped * dx
+    };
 
     const d = distanceMeters(pos.lat, pos.lon, proj.lat, proj.lon);
 
     if (d < minDist) {
       minDist = d;
-      targetIndex = i + 1; // altijd het **tweede punt van het segment**
+      bestIndex = i + 1;
     }
   }
 
-  // Pas snap buffer toe: als we dichtbij het **huidige target** zijn, spring naar **het volgende segment**
-  if (targetIndex < points.length - 1) {
-    const target = points[targetIndex];
-    if (distanceMeters(pos.lat, pos.lon, target.lat, target.lon) <= SNAP_RADIUS_METERS) {
-      targetIndex += 1;
+  // Fallback als we te ver weg zitten → globale search
+  if (minDist > 50) {
+    for (let i = 0; i < points.length - 1; i++) {
+      const A = points[i];
+      const B = points[i + 1];
+
+      const dx = B.lon - A.lon;
+      const dy = B.lat - A.lat;
+
+      const t = ((pos.lat - A.lat) * dy + (pos.lon - A.lon) * dx) / (dx*dx + dy*dy);
+      const tClamped = Math.max(0, Math.min(1, t));
+
+      const proj = {
+        lat: A.lat + tClamped * dy,
+        lon: A.lon + tClamped * dx
+      };
+
+      const d = distanceMeters(pos.lat, pos.lon, proj.lat, proj.lon);
+
+      if (d < minDist) {
+        minDist = d;
+        bestIndex = i + 1;
+      }
     }
   }
 
-  // Veiligheid: index nooit buiten array
-  if (targetIndex >= points.length) targetIndex = points.length - 1;
+  // Update progress
+  if (bestIndex > currentSegmentIndex - 5) {
+    currentSegmentIndex = bestIndex;
+  }
 
-  return points[targetIndex];
+  // Snappen
+  if (currentSegmentIndex < points.length - 1) {
+    const target = points[currentSegmentIndex];
+
+    if (
+      distanceMeters(pos.lat, pos.lon, target.lat, target.lon) <= SNAP_RADIUS_METERS
+    ) {
+      currentSegmentIndex++;
+    }
+  }
+
+  // Safety
+  if (currentSegmentIndex >= points.length) {
+    currentSegmentIndex = points.length - 1;
+  }
+
+  return points[currentSegmentIndex];
 }
 
 // REMAINING DISTANCE VANAF PROJECTIE OP SEGMENT
