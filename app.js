@@ -121,48 +121,87 @@ function getBearing(lat1, lon1, lat2, lon2) {
 // =========================
 // DISTANCE
 // =========================
-function distanceMeters(lat1, lon1, lat2, lon2) {
-  const R = 6371000;
-  const φ1 = lat1 * Math.PI/180;
-  const φ2 = lat2 * Math.PI/180;
-  const Δφ = (lat2 - lat1) * Math.PI/180;
-  const Δλ = (lon2 - lon1) * Math.PI/180;
+// =========================
+// REMAINING DISTANCE MET PROJECTIE OP SEGMENT
+// =========================
+function remainingDistanceKm(pos, points) {
+  if (points.length === 0) return 0;
 
-  const a =
-    Math.sin(Δφ/2)**2 +
-    Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+  let minDist = Infinity;
+  let segmentIndex = 0;
+  let projPoint = points[0];
 
-  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  // Vind dichtstbijzijnde segment en projectie
+  for (let i = 0; i < points.length - 1; i++) {
+    const A = points[i];
+    const B = points[i + 1];
+    const dx = B.lon - A.lon;
+    const dy = B.lat - A.lat;
+    const t = ((pos.lat - A.lat) * dy + (pos.lon - A.lon) * dx) / (dx*dx + dy*dy);
+    const tClamped = Math.max(0, Math.min(1, t));
+    const proj = { lat: A.lat + tClamped*dy, lon: A.lon + tClamped*dx };
+    const d = distanceMeters(pos.lat, pos.lon, proj.lat, proj.lon);
+
+    if (d < minDist) {
+      minDist = d;
+      segmentIndex = i;
+      projPoint = proj;
+    }
+  }
+
+  // Bereken restafstand vanaf projectiepunt
+  let dist = 0;
+
+  // afstand van projectiepunt naar eindpunt van het segment
+  const nextPoint = points[segmentIndex + 1];
+  dist += distanceMeters(projPoint.lat, projPoint.lon, nextPoint.lat, nextPoint.lon);
+
+  // afstand van resterende punten tot het einde van de track
+  for (let i = segmentIndex + 1; i < points.length - 1; i++) {
+    dist += distanceMeters(points[i].lat, points[i].lon, points[i + 1].lat, points[i + 1].lon);
+  }
+
+  return dist / 1000; // km
 }
 
 // =========================
-// NEXT GPX POINT MET SNAP BUFFER
+// NEXT GPX POINT MET SEGMENT-LOGICA EN SNAP
 // =========================
 function nextGPXPoint(pos, points) {
   if (points.length === 0) return null;
 
-  const scale = Math.cos(pos.lat * Math.PI/180);
-
-  for (let i = 0; i < points.length - 1; i++) {
-    const target = points[i + 1];
-    const d = distanceMeters(pos.lat, pos.lon, target.lat, target.lon);
-
-    if (d <= SNAP_RADIUS_METERS) {
-      return points[i + 2] || target; // snap naar volgende
-    }
-  }
-
-  // fallback: het dichtstbijzijnde punt
   let minDist = Infinity;
-  let closest = points[points.length - 1];
-  for (const p of points) {
-    const d = distanceMeters(pos.lat, pos.lon, p.lat, p.lon);
+  let targetIndex = points.length - 1; // fallback naar laatste punt
+
+  // Vind dichtstbijzijnde segment
+  for (let i = 0; i < points.length - 1; i++) {
+    const A = points[i];
+    const B = points[i + 1];
+
+    // projectie van huidige positie op segment A→B
+    const dx = B.lon - A.lon;
+    const dy = B.lat - A.lat;
+    const t = ((pos.lat - A.lat) * dy + (pos.lon - A.lon) * dx) / (dx*dx + dy*dy);
+    const tClamped = Math.max(0, Math.min(1, t));
+    const proj = { lat: A.lat + tClamped*dy, lon: A.lon + tClamped*dx };
+
+    const d = distanceMeters(pos.lat, pos.lon, proj.lat, proj.lon);
+
     if (d < minDist) {
       minDist = d;
-      closest = p;
+      targetIndex = i + 1; // altijd het tweede punt van segment
     }
   }
-  return closest;
+
+  // Buffer / snap: spring naar volgend punt als we dichtbij het huidige target zijn
+  if (targetIndex < points.length - 1) {
+    const target = points[targetIndex];
+    if (distanceMeters(pos.lat, pos.lon, target.lat, target.lon) <= SNAP_RADIUS_METERS) {
+      targetIndex += 1;
+    }
+  }
+
+  return points[targetIndex];
 }
 
 // =========================
