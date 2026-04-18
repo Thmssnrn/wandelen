@@ -225,7 +225,7 @@ function updateArrow() {
 
   // Rotatie boven pijl
   document.getElementById("arrowRotation").innerText =
-    `${Math.round(displayedRotation)}°`;
+    `${Math.round(-displayedRotation)}°`;
 
   // Haptische feedback
   if ('vibrate' in navigator && Math.abs(displayedRotation) < 2) {
