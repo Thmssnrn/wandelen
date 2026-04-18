@@ -224,9 +224,7 @@ function updateArrow() {
   displayedRotation = ((targetRotation + 540) % 360) - 180;
 
   document.getElementById("arrow").style.transform = `rotate(${displayedRotation}deg)`;
-  document.getElementById("arrowRotation").innerText = 
-    Math.abs(displayedRotation) < 2.5 ?
-    "0°" : `${Math.round(-displayedRotation)}°`;
+  document.getElementById("arrowRotation").innerText = `${Math.round(-displayedRotation)}°`;
 
   const rest = remainingDistanceKm(currentPosition, gpxPoints);
   document.getElementById("distance").innerText =
