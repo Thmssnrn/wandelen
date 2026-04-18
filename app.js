@@ -230,7 +230,7 @@ function updateArrow() {
 
   const rest = remainingDistanceKm(currentPosition, gpxPoints);
   document.getElementById("distance").innerText =
-    rest >= 1000 ?
+    rest >= .995 ? // Grens bij 995 m (groter -> 1,0 km; kleiner -> 990 m)
     `Restafstand: ${Math.round(rest * 10) / 10} km`.replace('.', ',') :
     `Restafstand: ${Math.round(rest * 100) * 10} m`.replace('.', ',');
 
