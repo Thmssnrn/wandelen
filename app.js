@@ -41,7 +41,7 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
     
     for (let i = gpxPoints.length - 1; i >= 0; i--) {
       gpxPoints[i].remainingAscent = ascent;
-       gpxPoints[i].remainingDescent = descent;
+      gpxPoints[i].remainingDescent = descent;
     
       if (i > 0) {
         const delta = gpxPoints[i].ele - gpxPoints[i - 1].ele;
@@ -56,6 +56,11 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
         p.remainingAscent = null;
         p.remainingDescent = null;
       });
+      // Verberg hoogtemeter-informatie
+      document.getElementById("elevation").style.display = "none";
+    } else {
+      // Maak hoogtemeter-informatie zichtbaar
+      document.getElementById("elevation").style.display = "block";
     }
 
     localStorage.setItem("gpxPoints", JSON.stringify(gpxPoints));
@@ -144,14 +149,15 @@ function nextGPXPoint(pos, points) {
   let minDist = Infinity;
   let bestIndex = currentSegmentIndex;
 
-  const BACKWARD_WINDOW = 10;
-  const FORWARD_WINDOW = 30;
+  const BACKWARD_WINDOW = 7;
+  const FORWARD_WINDOW = 25;
 
   const start = Math.max(0, currentSegmentIndex - BACKWARD_WINDOW);
   const end = Math.min(points.length - 1, currentSegmentIndex + FORWARD_WINDOW);
 
   // Zoek lokaal
   for (let i = start; i < end; i++) {
+    // Projectie -> afstand tot het segment ipv het punt
     const A = points[i];
     const B = points[i + 1];
 
@@ -177,6 +183,7 @@ function nextGPXPoint(pos, points) {
   // Fallback als we te ver weg zitten → globale search
   if (minDist > 50) {
     for (let i = 0; i < points.length - 1; i++) {
+      // Projectie -> afstand tot het segment ipv het punt
       const A = points[i];
       const B = points[i + 1];
 
@@ -200,28 +207,12 @@ function nextGPXPoint(pos, points) {
     }
   }
 
-  // Update progress
+  // Update progress (maar voorkom onrealistische sprongen naar achteren)
   if (bestIndex > currentSegmentIndex - 5) {
-    currentSegmentIndex = bestIndex;
+    currentSegmentIndex = Math.min(bestIndex, points.length - 1);
   }
 
-  // Snappen
-  if (currentSegmentIndex < points.length - 1) {
-    const target = points[currentSegmentIndex];
-
-    if (
-      distanceMeters(pos.lat, pos.lon, target.lat, target.lon) <= SNAP_RADIUS_METERS
-    ) {
-      currentSegmentIndex++;
-    }
-  }
-
-  // Safety
-  if (currentSegmentIndex >= points.length) {
-    currentSegmentIndex = points.length - 1;
-  }
-
-  return points[currentSegmentIndex];
+  return gpxPoints[currentSegmentIndex];
 }
 
 // REMAINING DISTANCE VANAF PROJECTIE OP SEGMENT
@@ -289,44 +280,28 @@ function updateArrow() {
   const target = nextGPXPoint(currentPosition, gpxPoints);
   if (!target) return;
 
-  // LOOK-AHEAD LOGICA
-  let bearingTarget = target;
-
+  // LOOK-AHEAD LOGICA bij bochten
   if (currentSegmentIndex < gpxPoints.length - 1) {
-    const nextNext = gpxPoints[currentSegmentIndex + 1];
+    const distToNext = distanceMeters(currentPosition.lat, currentPosition.lon, target.lat, target.lon);
 
-    const distToNext = distanceMeters(
-      currentPosition.lat,
-      currentPosition.lon,
-      target.lat,
-      target.lon
-    );
+    if (distToNext < 15) {
+      const lookAheadMeters = Math.max(0, 15 - distToNext);
 
-    // Hoeveel vooruit kijken richting volgende segment
-    const lookAheadMeters = Math.max(0, 15 - distToNext);
-
-    if (lookAheadMeters > 0) {
+      const nextNext = gpxPoints[currentSegmentIndex + 1];
       const dx = nextNext.lon - target.lon;
       const dy = nextNext.lat - target.lat;
+
       const segmentDist = distanceMeters(target.lat, target.lon, nextNext.lat, nextNext.lon);
+      const r = Math.min(1, lookAheadMeters / segmentDist);
 
-      const t = Math.min(1, lookAheadMeters / segmentDist);
-
-      bearingTarget = {
-        lat: target.lat + t * dy,
-        lon: target.lon + t * dx
-      };
+      target.lat += r * dy;
+      target.lon += r * dx;
     }
   }
 
 
   // BEREKEN BEARING
-  currentBearing = getBearing(
-    currentPosition.lat,
-    currentPosition.lon,
-    bearingTarget.lat,
-    bearingTarget.lon
-  );
+  currentBearing = getBearing(currentPosition.lat, currentPosition.lon, target.lat, target.lon);
 
   // Richting pijl aanpassen op basis van compass
   const targetRotation = currentBearing - currentHeading;
@@ -344,26 +319,17 @@ function updateArrow() {
 
   // Hoogtemeters
   const elev = gpxPoints[currentSegmentIndex];
+  document.getElementById("elevation").innerText =
+    `⭡ ${elev.remainingAscent} m, ⭣ ${elev.remainingDescent} m`;
   
-  if (elev.remainingAscent != null && elev.remainingDescent != null) {
-    document.getElementById("elevation").style.display = "block";
-    document.getElementById("elevation").innerText =
-      `⭡ ${elev.remainingAscent} m, ⭣ ${elev.remainingDescent} m`;
-  } else {
-    // Geen data / vlakke route
-    document.getElementById("elevation").style.display = "none";
-  }
-  
-  updateDebug(bearingTarget);
+  updateDebug(target);
 }
 
 // DEBUG
 function updateDebug(target) {
   if (!currentPosition || !target) return;
 
-  const debugDiv = document.getElementById("debug");
-
-  debugDiv.innerHTML = `
+  document.getElementById("debug").innerHTML = `
     <b>Positie</b><br>
     ${currentPosition.lat.toFixed(6)}, ${currentPosition.lon.toFixed(6)}<br><br>
 
@@ -381,7 +347,11 @@ function updateDebug(target) {
     ${target.lat.toFixed(6)}, ${target.lon.toFixed(6)}<br><br>
 
     <b>Restafstand</b><br>
-    ${remainingDistanceKm(currentPosition, gpxPoints).toFixed(3)} km
+    ${remainingDistanceKm(currentPosition, gpxPoints).toFixed(3)} km<br><br>
+    
+    <b>Hoogtemeters</b><br>
+    Ascent: ${gpxPoints[currentSegmentIndex].remainingAscent}<br>
+    Descent: ${gpxPoints[currentSegmentIndex].remainingDescent}
   `;
 }
 
