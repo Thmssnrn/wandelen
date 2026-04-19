@@ -39,6 +39,7 @@ body {
   display: inline-block;
   text-align: center;
   font-family: ui-sans-serif, sans-serif;
+  transition: transform 0.25s linear;
 }
 
 #arrowRotation {
