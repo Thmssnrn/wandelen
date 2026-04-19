@@ -7,22 +7,15 @@
   <link rel="manifest" href="./manifest.json">
   <link rel="stylesheet" href="./style.css">
 </head>
-<body>
 
-<div id="userGestureOverlay" style="
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    z-index: 9999;
-    background: transparent;
-"></div>
-  
-<div id="controls">
-  <input type="file" id="gpxUpload" style="display:none" accept=".gpx">
-  <label for="gpxUpload" id="fileButton">Selecteer bestand</label>
-  
-  <button id="startButton">Start kompas</button>
-</div>
+<body>
+  <div id="userGestureOverlay" style="display:none"></div>
+    
+  <div id="controls">
+    <input type="file" id="gpxUpload" style="display:none" accept=".gpx">
+    <label for="gpxUpload" id="fileButton">Selecteer bestand</label>
+    
+    <button id="startButton">Start kompas</button>
   </div>
 
   <div id="arrowRotation"></div>
