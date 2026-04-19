@@ -12,6 +12,8 @@ let currentSegmentIndex = 0;
 let watchId = null;
 let orientationActive = false;
 
+let inactivityTimeout = null;
+const INACTIVITY_LIMIT = 30 * 1000; // 30 sec
 
 async function startTracking() {
   // Compass toestemming (iOS)
@@ -40,6 +42,20 @@ async function startTracking() {
       timeout: 5000
     });
   }
+
+  // Start User Inactivity Listeners
+  const events = ["mousemove", "mousedown", "touchstart", "keydown", "scroll"];
+  events.forEach(event => {
+    document.addEventListener(event, resetUserInactivityTimer, { passive: true });
+  });
+
+  // Start User Inactivity Timer
+  if (inactivityTimeout) clearTimeout(inactivityTimeout);
+  inactivityTimeout = setTimeout(() => {
+    stopTracking();
+    alert("Tracking automatisch gepauzeerd wegens 30 seconden geen interactie.");
+  }, INACTIVITY_LIMIT);
+  
 }
 
 function stopTracking() {
@@ -53,6 +69,12 @@ function stopTracking() {
   if (watchId !== null) {
     navigator.geolocation.clearWatch(watchId);
     watchId = null;
+  }
+  
+  // Stop timer
+  if (inactivityTimeout) {
+    clearTimeout(inactivityTimeout);
+    inactivityTimeout = null;
   }
 }
 
@@ -196,7 +218,8 @@ function nextGPXPoint(pos, points) {
     const A = points[i];
     const B = points[i + 1];
 
-    const dx = B.lon - A.lon;
+    const scale = Math.cos((A.lat + B.lat) / 2 * Math.PI/180);
+    const dx = (B.lon - A.lon) * scale;
     const dy = B.lat - A.lat;
 
     const t = ((pos.lat - A.lat) * dy + (pos.lon - A.lon) * dx) / (dx*dx + dy*dy);
@@ -204,7 +227,7 @@ function nextGPXPoint(pos, points) {
 
     const proj = {
       lat: A.lat + tClamped * dy,
-      lon: A.lon + tClamped * dx
+      lon: A.lon + tClamped * dx / scale
     };
 
     const d = distanceMeters(pos.lat, pos.lon, proj.lat, proj.lon);
