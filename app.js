@@ -76,6 +76,15 @@ function stopTracking() {
     clearTimeout(inactivityTimeout);
     inactivityTimeout = null;
   }
+  
+  // fullscreen "overlay button" listener
+  overlay = document.getElementById("userGestureOverlay");
+  overlay.style.display = "block"; // Maak overlay klikbaar
+  
+  overlay.addEventListener("click", () => {
+      overlay.style.display = "none";
+      startTracking();
+  });
 }
 
 // COMPASS
