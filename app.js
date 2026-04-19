@@ -78,10 +78,10 @@ function stopTracking() {
   }
   
   // fullscreen "overlay button" listener
-  overlay = document.getElementById("userGestureOverlay");
+  const overlay = document.getElementById("userGestureOverlay");
   overlay.style.display = "block"; // Maak overlay klikbaar
   
-  overlay.addEventListener("click", () => {
+  overlay.onclick = () => {
       overlay.style.display = "none";
       startTracking();
   });
@@ -314,9 +314,8 @@ function distanceMeters(lat1, lon1, lat2, lon2) {
 
 // UPDATE ARROW
 let lastUpdate = 0;
-const UPDATE_INTERVAL = gpsSpeed > 1 ? 1000 : 250;  // ms
-
 function updateArrow() {
+  const UPDATE_INTERVAL = gpsSpeed > 1 ? 1000 : 250;  // ms
   const now = Date.now();
   if (now - lastUpdate < UPDATE_INTERVAL) return;
   if (!currentPosition ||gpxPoints.length === 0) return;
@@ -389,7 +388,7 @@ function updateArrow() {
     ${target.lat.toFixed(6)}, ${target.lon.toFixed(6)}<br><br>
 
     <b>Restafstand</b><br>
-    ${rest).toFixed(1)} m<br><br>
+    ${rest.toFixed(1)} m<br><br>
     
     <b>Hoogtemeters</b><br>
     Ascent: ${gpxPoints[currentSegmentIndex].remainingAscent}<br>
