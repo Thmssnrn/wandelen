@@ -30,11 +30,12 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
         lat: parseFloat(trkpts[i].getAttribute("lat")),
         lon: parseFloat(trkpts[i].getAttribute("lon")),
         ele: parseFloat(trkpts[i].getElementsByTagName("ele")[0]?.textContent || 0),
-        remainingAscent: 0, // vul later
-        remainingDescent: 0 // vul later
+        remainingAscent: null, // vul later
+        remainingDescent: null // vul later
       });
     }
 
+    // Bereken alvast de hoogtemeters
     let ascent = 0;
     let descent = 0;
     
@@ -47,6 +48,14 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
         if (delta > 0) ascent += delta;
         else descent -= delta; // delta negatief -> daling
       }
+    }
+
+    // Als de route vlak is tonen we geen hoogtemeter-data
+    if ((totalAscent + totalDescent) < 150) {
+      gpxPoints.forEach(p => {
+        p.remainingAscent = null;
+        p.remainingDescent = null;
+      });
     }
 
     localStorage.setItem("gpxPoints", JSON.stringify(gpxPoints));
@@ -335,9 +344,16 @@ function updateArrow() {
 
   // Hoogtemeters
   const elev = gpxPoints[currentSegmentIndex];
-  document.getElementById("elevation").innerText =
-    `⭡ ${elev.remainingAscent} m, ⭣ ${elev.remainingDescent} m`;
-
+  
+  if (elev.remainingAscent != null && elev.remainingDescent != null) {
+    document.getElementById("elevation").style.display = "block";
+    document.getElementById("elevation").innerText =
+      `⭡ ${elev.remainingAscent} m, ⭣ ${elev.remainingDescent} m`;
+  } else {
+    // Geen data / vlakke route
+    document.getElementById("elevation").style.display = "none";
+  }
+  
   updateDebug(bearingTarget);
 }
 
