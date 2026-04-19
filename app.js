@@ -150,14 +150,27 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
   reader.onload = function(event) {
     const parser = new DOMParser();
     const xml = parser.parseFromString(event.target.result, "text/xml");
+    
     const trkpts = xml.getElementsByTagName("trkpt");
+    if (trkpts.length === 0) {
+      trkpts = xml.getElementsByTagName("rtept");
+      if (trkpts.length === 0) {
+        alert("Dit GPX-bestand bevat geen trackpunten");
+        return;
+      }
+    }
+    if (xml.getElementsByTagName("parsererror").length > 0) {
+      alert("Fout bij het lezen van GPX-bestand");
+      return;
+    }
 
     gpxPoints = [];
     for (let i = 0; i < trkpts.length; i++) {
+      const eleNode = trkpts[i].getElementsByTagName("ele")[0];      
       gpxPoints.push({
         lat: parseFloat(trkpts[i].getAttribute("lat")),
         lon: parseFloat(trkpts[i].getAttribute("lon")),
-        ele: parseFloat(trkpts[i].getElementsByTagName("ele")[0]?.textContent || 0),
+        ele: eleNode ? parseFloat(eleNode.textContent) : 0,
         remainingAscent:  null, // vul later
         remainingDescent: null, // vul later
         remainingDistance: null // vul later
