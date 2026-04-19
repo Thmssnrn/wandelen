@@ -95,10 +95,16 @@ function onGPS(pos) {
   gpsHeading = pos.coords.heading;
   gpsSpeed = pos.coords.speed;
 
-  if (gpsSpeed > 1.5) {
-    window.removeEventListener("deviceorientation", handleOrientation);
+  if (gpsSpeed > 1) {
+    if (orientationActive) {
+      window.removeEventListener("deviceorientation", handleOrientation);
+      orientationActive = false;
+    }
   } else {
-    window.addEventListener("deviceorientation", handleOrientation);
+    if (!orientationActive) {
+      window.addEventListener("deviceorientation", handleOrientation);
+      orientationActive = true;
+    }
   }
 
   updateArrow();
@@ -258,47 +264,6 @@ function getBearing(lat1, lon1, lat2, lon2) {
   return (Math.atan2(y, x)*180/Math.PI + 360) % 360;
 }
 
-// REMAINING DISTANCE VANAF PROJECTIE OP SEGMENT
-function remainingDistanceKm(pos, points) {
-  if (points.length === 0) return 0;
-
-  let minDist = Infinity;
-  let segmentIndex = 0;
-  let projPoint = points[0];
-
-  // Vind dichtstbijzijnde segment en projectie
-  for (let i = 0; i < points.length - 1; i++) {
-    const A = points[i];
-    const B = points[i + 1];
-    const dx = B.lon - A.lon;
-    const dy = B.lat - A.lat;
-    const t = ((pos.lat - A.lat) * dy + (pos.lon - A.lon) * dx) / (dx*dx + dy*dy);
-    const tClamped = Math.max(0, Math.min(1, t));
-    const proj = { lat: A.lat + tClamped*dy, lon: A.lon + tClamped*dx };
-    const d = distanceMeters(pos.lat, pos.lon, proj.lat, proj.lon);
-
-    if (d < minDist) {
-      minDist = d;
-      segmentIndex = i;
-      projPoint = proj;
-    }
-  }
-
-  // Bereken restafstand vanaf projectiepunt
-  let dist = 0;
-
-  // afstand van projectiepunt naar eindpunt van het segment
-  const nextPoint = points[segmentIndex + 1];
-  dist += distanceMeters(projPoint.lat, projPoint.lon, nextPoint.lat, nextPoint.lon);
-
-  // afstand van resterende punten tot het einde van de track
-  for (let i = segmentIndex + 1; i < points.length - 1; i++) {
-    dist += distanceMeters(points[i].lat, points[i].lon, points[i + 1].lat, points[i + 1].lon);
-  }
-
-  return dist / 1000; // km
-}
-
 // HULPFUNCTIE: Afstand in meters
 function distanceMeters(lat1, lon1, lat2, lon2) {
   const R = 6371000; // aarde radius in meters
@@ -317,7 +282,7 @@ function distanceMeters(lat1, lon1, lat2, lon2) {
 
 // UPDATE ARROW
 let lastUpdate = 0;
-const UPDATE_INTERVAL = 200;  // ms
+const UPDATE_INTERVAL = gpsSpeed > 1 ? 1000 : 250;  // ms
 
 function updateArrow() {
   const now = Date.now();
@@ -372,14 +337,8 @@ function updateArrow() {
   const elev = gpxPoints[currentSegmentIndex];
   document.getElementById("elevation").innerText =
     `⭡ ${elev.remainingAscent} m, ⭣ ${elev.remainingDescent} m`;
-  
-  updateDebug(target);
-}
 
-// DEBUG
-function updateDebug(target) {
-  if (!currentPosition || !target) return;
-
+  // DEBUG
   document.getElementById("debug").innerHTML = `
     <b>Positie</b><br>
     ${currentPosition.lat.toFixed(6)}, ${currentPosition.lon.toFixed(6)}<br><br>
@@ -398,7 +357,7 @@ function updateDebug(target) {
     ${target.lat.toFixed(6)}, ${target.lon.toFixed(6)}<br><br>
 
     <b>Restafstand</b><br>
-    ${remainingDistanceKm(currentPosition, gpxPoints).toFixed(3)} km<br><br>
+    ${rest).toFixed(1)} m<br><br>
     
     <b>Hoogtemeters</b><br>
     Ascent: ${gpxPoints[currentSegmentIndex].remainingAscent}<br>
