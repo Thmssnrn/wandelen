@@ -360,6 +360,13 @@ function updateArrow() {
   const targetRotation = currentBearing - currentHeading;
   displayedRotation = ((targetRotation + 540) % 360) - 180;
 
+  const arrow = document.getElementById("arrow");
+
+  if (gpsSpeed > 1) {
+    arrow.style.transition = "transform 1s linear";
+  } else {
+    arrow.style.transition = "transform 0.25s linear";
+  }
   document.getElementById("arrow").style.transform = `rotate(${displayedRotation}deg)`;
   
   if (Math.abs(displayedRotation - prevRotation) >= 1) {
