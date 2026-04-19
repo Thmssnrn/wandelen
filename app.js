@@ -28,8 +28,25 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
     for (let i = 0; i < trkpts.length; i++) {
       gpxPoints.push({
         lat: parseFloat(trkpts[i].getAttribute("lat")),
-        lon: parseFloat(trkpts[i].getAttribute("lon"))
+        lon: parseFloat(trkpts[i].getAttribute("lon")),
+        ele: parseFloat(trkpts[i].getElementsByTagName("ele")[0]?.textContent || 0),
+        remainingAscent: 0, // vul later
+        remainingDescent: 0 // vul later
       });
+    }
+
+    let ascent = 0;
+    let descent = 0;
+    
+    for (let i = gpxPoints.length - 1; i >= 0; i--) {
+      gpxPoints[i].remainingAscent = ascent;
+       gpxPoints[i].remainingDescent = descent;
+    
+      if (i > 0) {
+        const delta = gpxPoints[i].ele - gpxPoints[i - 1].ele;
+        if (delta > 0) ascent += delta;
+        else descent -= delta; // delta negatief -> daling
+      }
     }
 
     localStorage.setItem("gpxPoints", JSON.stringify(gpxPoints));
@@ -263,9 +280,7 @@ function updateArrow() {
   const target = nextGPXPoint(currentPosition, gpxPoints);
   if (!target) return;
 
-  // ---------------------------
   // LOOK-AHEAD LOGICA
-  // ---------------------------
   let bearingTarget = target;
 
   if (currentSegmentIndex < gpxPoints.length - 1) {
@@ -295,9 +310,8 @@ function updateArrow() {
     }
   }
 
-  // ---------------------------
+
   // BEREKEN BEARING
-  // ---------------------------
   currentBearing = getBearing(
     currentPosition.lat,
     currentPosition.lon,
@@ -312,14 +326,17 @@ function updateArrow() {
   document.getElementById("arrow").style.transform = `rotate(${displayedRotation}deg)`;
   document.getElementById("arrowRotation").innerText = `${Math.round(-displayedRotation)}°`;
 
-  // ---------------------------
   // RESTAFSTAND
-  // ---------------------------
   const rest = remainingDistanceKm(currentPosition, gpxPoints);
   document.getElementById("distance").innerText =
     rest >= .995 ?
     `Restafstand: ${Math.round(rest * 10) / 10} km`.replace('.', ',') :
     `Restafstand: ${Math.round(rest * 100) * 10} m`.replace('.', ',');
+
+  // Hoogtemeters
+  const elev = gpxPoints[currentSegmentIndex];
+  document.getElementById("elevation").innerText =
+    `⭡ ${elev.remainingAscent} m, ⭣ ${elev.remainingDescent} m`;
 
   updateDebug(bearingTarget);
 }
