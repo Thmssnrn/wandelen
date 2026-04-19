@@ -82,9 +82,9 @@ function stopTracking() {
   overlay.style.display = "block"; // Maak overlay klikbaar
   
   overlay.onclick = () => {
-      overlay.style.display = "none";
-      startTracking();
-  });
+    overlay.style.display = "none";
+    startTracking();
+  };
 }
 
 // COMPASS
