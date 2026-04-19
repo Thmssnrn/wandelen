@@ -9,9 +9,100 @@ let displayedRotation = 0;
 let currentBearing = 0;
 let currentSegmentIndex = 0;
 
-// Snap buffer in meters
-const SNAP_RADIUS_METERS = 10;
+let watchId = null;
+let orientationActive = false;
 
+
+async function startTracking() {
+  // Compass toestemming (iOS)
+  if (
+    typeof DeviceOrientationEvent !== "undefined" &&
+    typeof DeviceOrientationEvent.requestPermission === "function"
+  ) {
+    const state = await DeviceOrientationEvent.requestPermission();
+    if (state !== "granted") {
+      alert("Geen compass toestemming");
+      return;
+    }
+  }
+
+  // Start compass
+  if (!orientationActive) {
+    window.addEventListener("deviceorientation", handleOrientation);
+    orientationActive = true;
+  }
+
+  // Start GPS
+  if (watchId === null) {
+    watchId = navigator.geolocation.watchPosition(onGPS, console.error, {
+      enableHighAccuracy: true,
+      maximumAge: 3000,
+      timeout: 5000
+    });
+  }
+}
+
+function stopTracking() {
+  // Stop compass
+  if (orientationActive) {
+    window.removeEventListener("deviceorientation", handleOrientation);
+    orientationActive = false;
+  }
+
+  // Stop GPS
+  if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+}
+
+// COMPASS
+function handleOrientation(event) {
+  // Gebruik GPS heading als we bewegen
+  if (gpsHeading !== null && gpsSpeed > 1) {
+    currentHeading = gpsHeading;    
+  } else {
+    let heading = null;
+  
+    if (!isNaN(event.webkitCompassHeading)) {
+      heading = event.webkitCompassHeading;
+    } else if (!isNaN(event.alpha)) {
+      heading = event.alpha;
+    } else return;
+  
+    if (hasOffset) {
+      currentHeading = (heading - headingOffset + 360) % 360;
+    } else {
+      headingOffset = heading;
+      hasOffset = true;
+      currentHeading = 0;
+    }
+  }
+   
+  updateArrow();
+}
+
+// GPS
+let gpsHeading = null;
+let gpsSpeed = 0;
+
+function onGPS(pos) {
+  currentPosition = {
+    lat: pos.coords.latitude,
+    lon: pos.coords.longitude
+  };
+
+  gpsHeading = pos.coords.heading;
+  gpsSpeed = pos.coords.speed;
+
+  if (gpsSpeed > 1.5) {
+    window.removeEventListener("deviceorientation", handleOrientation);
+  } else {
+    window.addEventListener("deviceorientation", handleOrientation);
+  }
+
+  updateArrow();
+}
 
 // GPX UPLOAD
 document.getElementById("gpxUpload").addEventListener("change", function(e) {
@@ -79,90 +170,6 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
 // Load saved GPX
 const saved = localStorage.getItem("gpxPoints");
 if (saved) gpxPoints = JSON.parse(saved);
-
-// START
-async function startCompass() {
-  if (
-    typeof DeviceOrientationEvent !== "undefined" &&
-    typeof DeviceOrientationEvent.requestPermission === "function"
-  ) {
-    const state = await DeviceOrientationEvent.requestPermission();
-    if (state !== "granted") {
-      alert("Geen compass toestemming");
-      return;
-    }
-  }
-
-  window.addEventListener("deviceorientation", handleOrientation);
-
-  navigator.geolocation.watchPosition(onGPS, console.error, {
-    enableHighAccuracy: true,
-    maximumAge: 3000,
-    timeout: 5000
-  });
-}
-
-// COMPASS
-function handleOrientation(event) {
-  // Gebruik GPS heading als we bewegen
-  if (gpsHeading !== null && gpsSpeed > 1) {
-    currentHeading = gpsHeading;    
-  } else {
-    let heading = null;
-  
-    if (!isNaN(event.webkitCompassHeading)) {
-      heading = event.webkitCompassHeading;
-    } else if (!isNaN(event.alpha)) {
-      heading = event.alpha;
-    } else return;
-  
-    if (hasOffset) {
-      currentHeading = (heading - headingOffset + 360) % 360;
-    } else {
-      headingOffset = heading;
-      hasOffset = true;
-      currentHeading = 0;
-    }
-  }
-   
-  updateArrow();
-}
-
-// GPS
-let gpsHeading = null;
-let gpsSpeed = 0;
-
-function onGPS(pos) {
-  currentPosition = {
-    lat: pos.coords.latitude,
-    lon: pos.coords.longitude
-  };
-
-  gpsHeading = pos.coords.heading;
-  gpsSpeed = pos.coords.speed;
-
-  if (gpsSpeed > 1.5) {
-    window.removeEventListener("deviceorientation", handleOrientation);
-  } else {
-    window.addEventListener("deviceorientation", handleOrientation);
-  }
-
-  updateArrow();
-}
-
-// BEARING
-function getBearing(lat1, lon1, lat2, lon2) {
-  const φ1 = lat1 * Math.PI/180;
-  const φ2 = lat2 * Math.PI/180;
-  const Δλ = (lon2 - lon1) * Math.PI/180;
-
-  const y = Math.sin(Δλ) * Math.cos(φ2);
-  const x =
-    Math.cos(φ1)*Math.sin(φ2) -
-    Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
-
-  return (Math.atan2(y, x)*180/Math.PI + 360) % 360;
-}
 
 // GPX: VOLGENDE TARGET (SEGMENT-GEBASEERD + SNAP)
 function nextGPXPoint(pos, points) {
@@ -235,6 +242,20 @@ function nextGPXPoint(pos, points) {
   }
 
   return gpxPoints[currentSegmentIndex];
+}
+
+// BEARING
+function getBearing(lat1, lon1, lat2, lon2) {
+  const φ1 = lat1 * Math.PI/180;
+  const φ2 = lat2 * Math.PI/180;
+  const Δλ = (lon2 - lon1) * Math.PI/180;
+
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x =
+    Math.cos(φ1)*Math.sin(φ2) -
+    Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
+
+  return (Math.atan2(y, x)*180/Math.PI + 360) % 360;
 }
 
 // REMAINING DISTANCE VANAF PROJECTIE OP SEGMENT
@@ -386,8 +407,16 @@ function updateDebug(target) {
 }
 
 // START BUTTON
-document.getElementById("startButton").addEventListener("click", startCompass);
+document.getElementById("startButton").addEventListener("click", startTracking);
 
+// VISIBILITY API
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    stopTracking();
+  } else {
+    startTracking();
+  }
+});
 
 // SERVICE WORKER
 if ("serviceWorker" in navigator) {
