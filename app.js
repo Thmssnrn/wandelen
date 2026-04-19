@@ -30,8 +30,9 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
         lat: parseFloat(trkpts[i].getAttribute("lat")),
         lon: parseFloat(trkpts[i].getAttribute("lon")),
         ele: parseFloat(trkpts[i].getElementsByTagName("ele")[0]?.textContent || 0),
-        remainingAscent: null, // vul later
-        remainingDescent: null // vul later
+        remainingAscent:  null, // vul later
+        remainingDescent: null, // vul later
+        remainingDistance: null // vul later
       });
     }
 
@@ -46,23 +47,27 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
       if (i > 0) {
         const delta = gpxPoints[i].ele - gpxPoints[i - 1].ele;
         if (delta > 0) ascent += delta;
-        else descent -= delta; // delta negatief -> daling
+        else descent -= delta; // - (negatieve delta) === + positieve delta
       }
     }
 
-    // Als de route vlak is tonen we geen hoogtemeter-data
-    if ((totalAscent + totalDescent) < 150) {
-      gpxPoints.forEach(p => {
-        p.remainingAscent = null;
-        p.remainingDescent = null;
-      });
-      // Verberg hoogtemeter-informatie
+    // Verberg de hoogtemeter-data bij vlakke routes
+    if (ascent < 75 && descent < 75) {
       document.getElementById("elevation").style.display = "none";
     } else {
-      // Maak hoogtemeter-informatie zichtbaar
       document.getElementById("elevation").style.display = "block";
     }
 
+    // Bereken alvast de afstand
+    let distance = 0
+    for (let i = gpxPoints.length - 1; i >= 0; i--) {
+      gpxPoints[i].remainingDistance = distance;
+    
+      if (i > 0) {
+        distance += distanceMeters(gpxPoints[i].lat, gpxPoints[i].lon, gpxPoints[i - 1].lat, gpxPoints[i - 1].lon);
+      }
+    }
+    
     localStorage.setItem("gpxPoints", JSON.stringify(gpxPoints));
     currentSegmentIndex = 0;
     alert(`GPX geladen met ${gpxPoints.length} punten`);
@@ -92,38 +97,55 @@ async function startCompass() {
 
   navigator.geolocation.watchPosition(onGPS, console.error, {
     enableHighAccuracy: true,
-    maximumAge: 0
+    maximumAge: 3000,
+    timeout: 5000
   });
 }
 
 // COMPASS
 function handleOrientation(event) {
-  let heading = null;
-
-  if (event.webkitCompassHeading !== undefined) {
-    heading = event.webkitCompassHeading;
-  } else if (event.alpha !== null) {
-    heading = event.alpha;
+  // Gebruik GPS heading als we bewegen
+  if (gpsHeading !== null && gpsSpeed > 1) {
+    currentHeading = gpsHeading;    
+  } else {
+    let heading = null;
+  
+    if (!isNaN(event.webkitCompassHeading)) {
+      heading = event.webkitCompassHeading;
+    } else if (!isNaN(event.alpha)) {
+      heading = event.alpha;
+    } else return;
+  
+    if (hasOffset) {
+      currentHeading = (heading - headingOffset + 360) % 360;
+    } else {
+      headingOffset = heading;
+      hasOffset = true;
+      currentHeading = 0;
+    }
   }
-
-  if (heading == null || isNaN(heading)) return;
-
-  if (!hasOffset) {
-    headingOffset = heading;
-    hasOffset = true;
-  }
-
-  currentHeading = (heading - headingOffset + 360) % 360;
-
+   
   updateArrow();
 }
 
 // GPS
+let gpsHeading = null;
+let gpsSpeed = 0;
+
 function onGPS(pos) {
   currentPosition = {
     lat: pos.coords.latitude,
     lon: pos.coords.longitude
   };
+
+  gpsHeading = pos.coords.heading;
+  gpsSpeed = pos.coords.speed;
+
+  if (gpsSpeed > 1.5) {
+    window.removeEventListener("deviceorientation", handleOrientation);
+  } else {
+    window.addEventListener("deviceorientation", handleOrientation);
+  }
 
   updateArrow();
 }
@@ -273,11 +295,17 @@ function distanceMeters(lat1, lon1, lat2, lon2) {
 }
 
 // UPDATE ARROW
+let lastUpdate = 0;
+const UPDATE_INTERVAL = 200;  // ms
+
 function updateArrow() {
-  if (!currentPosition || gpxPoints.length === 0) return;
+  const now = Date.now();
+  if (now - lastUpdate < UPDATE_INTERVAL) return;
+  if (!currentPosition ||gpxPoints.length === 0) return;
+  lastUpdate = now;
 
   // Bepaal het "huidige target"
-  const target = nextGPXPoint(currentPosition, gpxPoints);
+  let target = { ...nextGPXPoint(currentPosition, gpxPoints) }; // Maak een kopie
   if (!target) return;
 
   // LOOK-AHEAD LOGICA bij bochten
@@ -292,30 +320,32 @@ function updateArrow() {
       const dy = nextNext.lat - target.lat;
 
       const segmentDist = distanceMeters(target.lat, target.lon, nextNext.lat, nextNext.lon);
-      const r = Math.min(1, lookAheadMeters / segmentDist);
+      const t = Math.min(1, lookAheadMeters / segmentDist);
 
-      target.lat += r * dy;
-      target.lon += r * dx;
+      target.lat += t * dy;
+      target.lon += t * dx;
     }
   }
 
-
-  // BEREKEN BEARING
-  currentBearing = getBearing(currentPosition.lat, currentPosition.lon, target.lat, target.lon);
+  const prevRotation = displayedRotation; 
 
   // Richting pijl aanpassen op basis van compass
+  currentBearing = getBearing(currentPosition.lat, currentPosition.lon, target.lat, target.lon);
   const targetRotation = currentBearing - currentHeading;
   displayedRotation = ((targetRotation + 540) % 360) - 180;
 
   document.getElementById("arrow").style.transform = `rotate(${displayedRotation}deg)`;
-  document.getElementById("arrowRotation").innerText = `${Math.round(-displayedRotation)}°`;
+  
+  if (Math.abs(displayedRotation - prevRotation) >= 1) {
+    document.getElementById("arrowRotation").innerText = `${Math.round(-displayedRotation)}°`;
+  }
 
   // RESTAFSTAND
-  const rest = remainingDistanceKm(currentPosition, gpxPoints);
+  const rest = target.remainingDistance + distanceMeters(currentPosition.lat, currentPosition.lon, target.lat, target.lon);
   document.getElementById("distance").innerText =
-    rest >= .995 ?
-    `Restafstand: ${Math.round(rest * 10) / 10} km`.replace('.', ',') :
-    `Restafstand: ${Math.round(rest * 100) * 10} m`.replace('.', ',');
+    rest >= 995 ?
+    `Restafstand: ${Math.round(rest / 100) / 10} km`.replace('.', ',') :
+    `Restafstand: ${Math.round(rest / 10) * 10} m`.replace('.', ',');
 
   // Hoogtemeters
   const elev = gpxPoints[currentSegmentIndex];
