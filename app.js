@@ -143,8 +143,11 @@ function onGPS(pos) {
 
 // GPX UPLOAD
 document.getElementById("gpxUpload").addEventListener("change", function(e) {
+  alert("Welkom, nieuw bestand!");
   const file = e.target.files[0];
   if (!file) return;
+
+  alert("Het bestand wordt geleden...");
 
   const reader = new FileReader();
   reader.onload = function(event) {
