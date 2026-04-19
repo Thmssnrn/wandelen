@@ -51,11 +51,7 @@ async function startTracking() {
 
   // Start User Inactivity Timer
   if (inactivityTimeout) clearTimeout(inactivityTimeout);
-  inactivityTimeout = setTimeout(() => {
-    stopTracking();
-    alert("Tracking automatisch gepauzeerd wegens 30 seconden geen interactie.");
-  }, INACTIVITY_LIMIT);
-  
+  inactivityTimeout = setTimeout(stopTracking, INACTIVITY_LIMIT);
 }
 
 function stopTracking() {
@@ -143,15 +139,11 @@ function onGPS(pos) {
 
 // GPX UPLOAD
 document.getElementById("gpxUpload").addEventListener("change", function(e) {
-  alert("Welkom, nieuw bestand!");
   const file = e.target.files[0];
   if (!file) return;
 
-  alert("Het bestand wordt geleden...");
-
   const reader = new FileReader();
   reader.onload = function(event) {
-    alert("File loaded");
     const parser = new DOMParser();
     const xml = parser.parseFromString(event.target.result, "text/xml");
     
@@ -180,9 +172,7 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
         remainingDistance: null // vul later
       });
     }
-
-    alert("gpxPoints gevonden");
-
+    
     // Bereken alvast de hoogtemeters
     let ascent = 0;
     let descent = 0;
@@ -205,8 +195,6 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
       document.getElementById("elevation").style.display = "block";
     }
 
-    alert("hoogte-data toegevoegd");
-
     // Bereken alvast de afstand
     let distance = 0
     for (let i = gpxPoints.length - 1; i >= 0; i--) {
@@ -216,8 +204,6 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
         distance += distanceMeters(gpxPoints[i].lat, gpxPoints[i].lon, gpxPoints[i - 1].lat, gpxPoints[i - 1].lon);
       }
     }
-
-    alert("afstanden berekend");
     
     localStorage.setItem("gpxPoints", JSON.stringify(gpxPoints));
     currentSegmentIndex = 0;
