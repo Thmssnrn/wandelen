@@ -11,6 +11,8 @@ let currentSegmentIndex = 0;
 
 let gpsHeading = null;
 let gpsSpeed = 0;
+let gpsSince = null;
+const GPS_MIN_DURATION = 3000; // 3 seconden
 
 let watchId = null;
 let orientationActive = false;
@@ -60,6 +62,12 @@ async function startTracking() {
 
           gpsHeading = pos.coords.heading;
           gpsSpeed = pos.coords.speed;
+
+          if (gpsSpeed > 0.5) { // 1,8 km/h
+            gpsSince ??= Date.now(); // alleen wijzigen als gpsSince === null, anders laten staan
+          } else {
+            gpsSince = null;
+          }
 
           updateArrow();
       },
@@ -115,27 +123,22 @@ function stopTracking() {
 
 // COMPASS
 function handleOrientation(event) {
-  // Gebruik GPS heading als we bewegen
-  if (gpsHeading !== null && gpsSpeed > 1) {
-    currentHeading = gpsHeading;
+  let heading = null;
+
+  if (!isNaN(event.webkitCompassHeading)) {
+    heading = event.webkitCompassHeading;
+  } else if (!isNaN(event.alpha)) {
+    heading = event.alpha;
+  } else return;
+
+  if (hasOffset) {
+    currentHeading = (heading - headingOffset + 360) % 360;
   } else {
-    let heading = null;
-  
-    if (!isNaN(event.webkitCompassHeading)) {
-      heading = event.webkitCompassHeading;
-    } else if (!isNaN(event.alpha)) {
-      heading = event.alpha;
-    } else return;
-  
-    if (hasOffset) {
-      currentHeading = (heading - headingOffset + 360) % 360;
-    } else {
-      headingOffset = heading;
-      hasOffset = true;
-      currentHeading = 0;
-    }
+    headingOffset = heading;
+    hasOffset = true;
+    currentHeading = 0;
   }
-   
+  
   updateArrow();
 }
 
@@ -251,7 +254,7 @@ function distanceMeters(loc1, loc2) {
 
 // UPDATE ARROW
 function updateArrow() {
-  const UPDATE_INTERVAL = gpsSpeed > 1 ? 1000 : 250;  // ms
+  const UPDATE_INTERVAL = gpsSpeed >= 0.5 ? 1000 : 250;  // m/s en ms
   const now = Date.now();
   if (now - lastUpdate < UPDATE_INTERVAL) return;
   if (!currentPosition ||gpxPoints.length === 0) return;
@@ -260,7 +263,7 @@ function updateArrow() {
   // Bepaal het "huidige target"
   let target = { ...nextGPXPoint(currentPosition, gpxPoints) }; // Maak een kopie
   if (!target) return;
-
+  
   // LOOK-AHEAD LOGICA bij bochten
   if (currentSegmentIndex < gpxPoints.length - 1) {
     const distToNext = distanceMeters(currentPosition, target);
@@ -300,15 +303,24 @@ function updateArrow() {
 
   const arrow = document.getElementById("arrow");
 
-  if (gpsSpeed > 1) {
+  if (gpsSpeed > 0.5) {
     arrow.style.transition = "transform 1s linear";
   } else {
     arrow.style.transition = "transform 0.25s linear";
   }
   document.getElementById("arrow").style.transform = `rotate(${displayedRotation}deg)`;
-  
-  if (Math.abs(displayedRotation - prevRotation) >= 1) {
-    document.getElementById("arrowRotation").innerText = `${Math.round(-displayedRotation)}°`;
+  document.getElementById("arrowRotation").innerText = `${Math.round(-displayedRotation)}°`;
+
+  // GEKLEURDE ACHTERGROND
+
+  if (gpsSince !== null && gpsHeading !== null && now - gpsSince >= GPS_MIN_DURATION) {
+    diff = Math.abs(currentBearing - gpsHeading) % 360;
+    if (diff > 45 || 360 - diff > 45) { // graden
+      document.getElementById("arrow").style.backgroundColor = "red";
+      navigator.vibrate?.(200);
+    } else {
+      document.getElementById("arrow").style.backgroundColor = "white";
+    }
   }
 
   // RESTERENDE AFSTAND
@@ -318,7 +330,7 @@ function updateArrow() {
     `Nog ${Math.round(rest / 100) / 10} km`.replace('.', ',') :
     `Nog ${Math.round(rest / 10) * 10} m`.replace('.', ',');
 
-  // Hoogtemeters
+  // HOOGTEMETERS
   const elev = gpxPoints[currentSegmentIndex];
   document.getElementById("elevation").innerText =
     `⭡ ${elev.remainingAscent} m, ⭣ ${elev.remainingDescent} m`;
