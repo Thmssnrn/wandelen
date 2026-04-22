@@ -11,8 +11,7 @@ let currentBearing = 0;
 let currentPosition = null;
 let gpsHeading = null;
 let gpsSpeed = 0;
-let gpsSince = null;
-const GPS_MIN_DURATION = 3000; // 3 sec
+let gpsSince = Infinity;
 
 let watchId = null;
 let orientationActive = false;
@@ -24,13 +23,26 @@ let currentSegmentIndex = 0;
 let lastUpdate = 0;
 let currentView = "compassView";
 
+// HTML elements
+const overlay = document.getElementById("userGestureOverlay");
+const arrow = document.getElementById("arrow");
+const arrowRotationText = document.getElementById("arrowRotation").innerText;
+const distanceText = document.getElementById("distance").innerText;
+const elevation = document.getElementById("elevation");
+const debugHTML = document.getElementById("debug").innerHTML;
+const mapCanvas = document.getElementById("mapCanvas");
+const elevCtx = document.getElementById("elevationCanvas").getContext("2d");
+const startButton = document.getElementById("startButton");
+const uploadButton = document.getElementById("gpxUpload");
+const toggleViewButton = document.getElementById("toggleViewButton");
+
 // HELPERS
 function degToRad(φ) {
   return φ * Math.PI / 180;
 }
 
 function radToDeg(φ) {
-  return φ * 180 / Math.PI;
+  return (φ * 180 / Math.PI + 360) % 360;
 }
 
 // START
@@ -51,26 +63,38 @@ async function startTracking() {
   if (!orientationActive) {
     window.addEventListener("deviceorientation", handleOrientation);
     orientationActive = true;
+    hasOffset = false;
   }
-  
-  // Reset offset
-  hasOffset = false;
 
   // Start GPS
   if (watchId === null) {
     watchId = navigator.geolocation.watchPosition(
       (pos) => { // on update:
+          const previousPosition = currentPosition;
           currentPosition = {
             lat: pos.coords.latitude,
             lon: pos.coords.longitude
           };
-
+          
           gpsHeading = pos.coords.heading;
-          gpsSpeed = pos.coords.speed;
+          gpsSpeed = pos.coords.speed * 3.6; // m/s -> km/h
 
-          if (gpsSpeed > 0.5) { // 1,8 km/h
-            gpsSince ??= Date.now(); // alleen wijzigen als gpsSince === null, anders laten staan
-          } else gpsSince = null;
+          const now = Date.now();
+          if (gpsSpeed < 2) gpsSince = now + 5000;
+          else {
+            gpsSince = min(gpsSince, now);
+            if (previousPosition !== null && gpsHeading === null && now - gpsSince >= 3000) {
+              const radian = Math.PI / 180;
+              lat1 = degToRad(previousPosition.lat);
+              lon1 = degToRad(previousPosition.lon);
+              lat2 = degToRad(currentPosition.lat);
+              lon2 = degToRad(currentPosition.lon);
+              const dLon = lon2 - lon1;
+              const y = Math.sin(dLon) * Math.cos(lat2);
+              const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+              gpsHeading = radToDeg(Math.atan2(y, x));
+            }
+          }
         
           if (currentView === "compassView") updateArrow();
           else updateMap();
@@ -78,8 +102,8 @@ async function startTracking() {
       (err) => console.error(err),
       { // Configureer GPS:
         enableHighAccuracy: true,
-        maximumAge: 3000,
-        timeout: 5000
+        maximumAge: 5000,
+        timeout: 8000
       }
     );
   }
@@ -96,6 +120,10 @@ async function startTracking() {
   // Start User Inactivity Timer
   if (inactivityTimeout) clearTimeout(inactivityTimeout);
   inactivityTimeout = setTimeout(stopTracking, INACTIVITY_LIMIT);
+
+  // Verwijder overlay
+  overlay.style.display = "none";
+  overlay.style.pointerEvents = "none";
 }
 
 // PAUZE
@@ -119,15 +147,9 @@ function stopTracking() {
   }
   
   // fullscreen "overlay button" listener
-  const overlay = document.getElementById("userGestureOverlay");
   overlay.style.display = "block";
   overlay.style.pointerEvents = "auto";
-  
-  overlay.addEventListener("click", () => {
-    overlay.style.display = "none";
-    overlay.style.pointerEvents = "none";
-    startTracking();
-  }, { once: true });
+  overlay.addEventListener("click", startTracking, { once: true });
 }
 
 // COMPASS
@@ -149,7 +171,7 @@ function handleOrientation(event) {
     hasOffset = true;
     currentHeading = 0;
   }
-  if (gpsHeading !== null && gpsSpeed > 0.5) {
+  if (gpsHeading !== null && gpsSpeed > 2) {
     currentHeading = 0.9 * currentHeading + 0.1 * gpsHeading; // smoothing, maar ik betwijfel of het iets doet
   }
   updateArrow();
@@ -232,8 +254,8 @@ function nextGPXPoint(pos, points) {
   if (currentSegmentIndex < gpxPoints.length - 1) {
     const distToNext = distanceMeters(currentPosition, target);
 
-    if (distToNext < 15) {
-      const lookAheadMeters = Math.max(0, 15 - distToNext);
+    if (distToNext < 30) {
+      const lookAheadMeters = Math.max(0, 30 - distToNext);
 
       const nextNext = gpxPoints[currentSegmentIndex + 1];
       const dx = nextNext.lon - target.lon;
@@ -268,7 +290,7 @@ function distanceMeters(loc1, loc2) {
 // UPDATE ARROW
 function updateArrow() {
   if (currentView !== "compassView") return;
-  const UPDATE_INTERVAL = gpsSpeed >= 0.5 ? 1000 : 250;  // m/s en ms
+  const UPDATE_INTERVAL = gpsSpeed > 2 ? 1000 : 250;  // m/s en ms
   const now = Date.now();
   if (now - lastUpdate < UPDATE_INTERVAL) return;
   if (!currentPosition || gpxPoints.length === 0) return;
@@ -288,7 +310,6 @@ function updateArrow() {
     Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
 
   currentBearing = radToDeg(Math.atan2(y, x));
-  currentBearing = (currentBearing + 360) % 360;
 
 
   // Richting pijl aanpassen op basis van compass
@@ -296,41 +317,38 @@ function updateArrow() {
   const targetRotation = currentBearing - currentHeading;
   displayedRotation = ((targetRotation + 540) % 360) - 180;
 
-  const arrow = document.getElementById("arrow");
-
-  if (gpsSpeed > 0.5) {
+  if (gpsSpeed > 2) {
     arrow.style.transition = "transform 1s linear";
   } else {
     arrow.style.transition = "transform 0.25s linear";
   }
-  document.getElementById("arrow").style.transform = `rotate(${displayedRotation}deg)`;
-  document.getElementById("arrowRotation").innerText = `${Math.round(-displayedRotation)}°`;
+  arrow.style.transform = `rotate(${displayedRotation}deg)`;
+  arrowRotationText = `${Math.round(-displayedRotation)}°`;
 
   // GEKLEURDE ACHTERGROND
-  if (gpsSince !== null && gpsHeading !== null && now - gpsSince >= GPS_MIN_DURATION) {
+  if (gpsHeading !== null && now - gpsSince >= 3000) {
     let diff = Math.abs(currentBearing - gpsHeading) % 360;
     if (diff > 45 || 360 - diff > 45) { // graden
-      document.getElementById("arrow").style.backgroundColor = "red";
+      document.arrow.style.backgroundColor = "red";
       navigator.vibrate?.(200);
     } else {
-      document.getElementById("arrow").style.backgroundColor = "white";
+      document.arrow.style.backgroundColor = "white";
     }
   }
 
   // RESTERENDE AFSTAND
   const rest = target.remainingDistance + distanceMeters(currentPosition, target);
-  document.getElementById("distance").innerText =
+  distanceText.innerText =
     rest >= 995 ?
     `Nog ${Math.round(rest / 100) / 10} km`.replace('.', ',') :
     `Nog ${Math.round(rest / 10) * 10} m`.replace('.', ',');
 
   // HOOGTEMETERS
   const elev = gpxPoints[currentSegmentIndex];
-  document.getElementById("elevation").innerText =
-    `⭡ ${elev.remainingAscent} m, ⭣ ${elev.remainingDescent} m`;
+  elevation.innerText = `⭡ ${elev.remainingAscent} m, ⭣ ${elev.remainingDescent} m`;
 
   // DEBUG
-  document.getElementById("debug").innerHTML = `
+  debugHTML = `
     <b>Positie</b><br>
     ${currentPosition.lat.toFixed(6)}, ${currentPosition.lon.toFixed(6)}<br><br>
 
@@ -376,9 +394,8 @@ function updateMap() {
   if (!currentPosition || gpxPoints.length === 0) return;
   lastUpdate = now;
     
-  const canvas = document.getElementById("mapCanvas");
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const ctx = mapCanvas.getContext("2d");
+  ctx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
   
   // ROUTE
   ctx.lineWidth = 4;
@@ -418,7 +435,6 @@ function updateMap() {
   ctx.fill();
   
   // HOOGTEPRROFIEL
-  const elevCtx = document.getElementById("elevationCanvas").getContext("2d");
   const maxElev = Math.max(...gpxPoints.map(p => p.ele));
   const minElev = Math.min(...gpxPoints.map(p => p.ele));
 
@@ -449,11 +465,11 @@ function updateMap() {
 
 
 // START BUTTON
-document.getElementById("startButton").addEventListener("click", startTracking);
+startButton.addEventListener("click", startTracking);
 
 
 // GPX UPLOAD
-document.getElementById("gpxUpload").addEventListener("change", function(e) {
+uploadButton.addEventListener("change", function(e) {
   const file = e.target.files[0];
   if (!file) return;
 
@@ -504,11 +520,7 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
     }
 
     // Verberg de hoogtemeter-data bij vlakke routes
-    if (ascent < 75 && descent < 75) {
-      document.getElementById("elevation").style.display = "none";
-    } else {
-      document.getElementById("elevation").style.display = "block";
-    }
+    elevation.style.display = (ascent < 75 && descent < 75) ? "none" : "block";
 
     // Bereken alvast de afstand
     let distance = 0
@@ -570,7 +582,7 @@ if ("serviceWorker" in navigator) {
 }
 
 // TOGGLE VIEW
-document.getElementById("toggleViewButton").onclick = () => {
+toggleViewButton.onclick = () => {
   const otherView = currentView === "compassView" ? "mapView" : "compassView";
   document.getElementById(otherView).classList.add("active");
   document.getElementById(currentView).classList.remove("active");
