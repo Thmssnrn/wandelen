@@ -4,7 +4,6 @@ body {
   color: white;
   font-family: ui-sans-serif, sans-serif;
   text-align: center;
-  overflow: hidden;
 }
 
 #userGestureOverlay {
