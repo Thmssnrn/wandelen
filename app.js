@@ -2,11 +2,8 @@ let gpxPoints = [];
 let gpxBounds = null;
 
 let currentHeading = 0;
-let headingOffset = 0;
-let hasOffset = false;
-
-let displayedRotation = 0;
 let currentBearing = 0;
+let displayedRotation = 0;
 
 let currentPosition = null;
 let gpsHeading = null;
@@ -63,7 +60,6 @@ async function startTracking() {
   if (!orientationActive) {
     window.addEventListener("deviceorientation", handleOrientation);
     orientationActive = true;
-    hasOffset = false;
   }
 
   // Start GPS
@@ -75,7 +71,7 @@ async function startTracking() {
             lat: pos.coords.latitude,
             lon: pos.coords.longitude
           };
-          
+
           gpsHeading = pos.coords.heading;
           gpsSpeed = pos.coords.speed * 3.6; // m/s -> km/h
 
@@ -84,12 +80,9 @@ async function startTracking() {
           else {
             gpsSince = Math.min(gpsSince, now);
             if (previousPosition !== null && gpsHeading === null && now - gpsSince >= 3000) {
-              const radian = Math.PI / 180;
-              lat1 = degToRad(previousPosition.lat);
-              lon1 = degToRad(previousPosition.lon);
-              lat2 = degToRad(currentPosition.lat);
-              lon2 = degToRad(currentPosition.lon);
-              const dLon = lon2 - lon1;
+              const lat1 = degToRad(previousPosition.lat);
+              const lat2 = degToRad(currentPosition.lat);
+              const dLon = degToRad(currentPosition.lon - previousPosition.lon);
               const y = Math.sin(dLon) * Math.cos(lat2);
               const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
               gpsHeading = radToDeg(Math.atan2(y, x));
@@ -160,23 +153,12 @@ function handleOrientation(event) {
   if (currentView !== "compassView") return;
   lastUpdate = now;
   
-  let heading;
   if (!isNaN(event.webkitCompassHeading)) {
-    heading = event.webkitCompassHeading;
-  } else if (!isNaN(event.alpha)) {
-    heading = event.alpha;
+    currentHeading = event.webkitCompassHeading;
+  } else if (gpsHeading !== null && Date.now() - gpsSince >= 3000) {
+    currentHeading = gpsHeading
   } else return;
 
-  if (hasOffset) {
-    currentHeading = (heading - headingOffset + 360) % 360;
-  } else {
-    headingOffset = heading;
-    hasOffset = true;
-    currentHeading = 0;
-  }
-  if (gpsHeading !== null && gpsSpeed > 2) {
-    currentHeading = 0.9 * currentHeading + 0.1 * gpsHeading; // smoothing, maar ik betwijfel of het iets doet
-  }
   updateArrow();
 }
 
@@ -220,7 +202,7 @@ function nextGPXPoint(pos, points) {
   }
 
   // Fallback als we te ver weg zitten → globale search
-  if (minDist > 33) {
+  if (minDist > 50) {
     for (let i = 0; i < points.length - 1; i++) {
       // Projectie -> afstand tot het segment ipv het punt
       const A = points[i];
@@ -597,7 +579,8 @@ overlay.addEventListener("click", startTracking, { once: true });
 // - Als de gebruiker beweegt kijkt hij niet naar de app maar om zich heen; alleen als hij stilstaat hoef je de informatie bij te werken.
 // - Je kunt ook stoppen met het updaten van de DOM, maar ik vraag me af of dat verschil maakt.
 // - Je kunt een energiebesparende modus toevoegen, die HighAccuracy op false zet en de huidige locatie vrijwel altijd projecteert op de route.
-// * Het klopt niet om ervan uit te gaan dat de gebruiker de iPhone naar het noorden richt als hij op 'start' drukt.
+// * De kaart wordt niet getoond als de gebruiker op de knop drukt.
+// * Het label van de 'toon kaart'-knop moet bijgewerkt worden als de kaart al getoond wordt.
 
 // Verbeterpunten tijdens testen 1:
 // * We kunnen ook een knop toevoegen dat de gebruiker ergens al geweest is, die de currentSegmentIndex verhoogt, en/of een knop die aangeeft dat de kant die de pijl op wijst niet mogelijk is (geen pad), die het zoekbereik tijdelijk uitschakelt.
