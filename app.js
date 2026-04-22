@@ -602,6 +602,7 @@ overlay.addEventListener("click", startTracking, { once: true });
 // * Het label van de 'toon kaart'-knop moet bijgewerkt worden als de kaart al getoond wordt.
 // * De overlay listener werkt op deze manier maar éénmalig, en dat is niet de bedoeling.
 // * Is het nog nodig om het GPS-pollen te stoppen als de kaart wordt getoond?
+// * Als de route alleen omhoog/omlaag gaat, ook hoogteprofiel en hoogte-informatie tonen.
 
 // Verbeterpunten tijdens testen 1:
 // * We kunnen ook een knop toevoegen dat de gebruiker ergens al geweest is, die de currentSegmentIndex verhoogt, en/of een knop die aangeeft dat de kant die de pijl op wijst niet mogelijk is (geen pad), die het zoekbereik tijdelijk uitschakelt.
@@ -611,5 +612,6 @@ overlay.addEventListener("click", startTracking, { once: true });
 
 // Verbeterpunten tijdens testen 2:
 // * Beperkt aantal verhogingen segment-index per minuut?
-// * Hoogtemeters afronden
 // * Iets doen bij aankomst: functioneel of voor het gevoel of een combinatie daarvan.
+
+
