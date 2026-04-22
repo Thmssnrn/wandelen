@@ -70,9 +70,8 @@ async function startTracking() {
 
           if (gpsSpeed > 0.5) { // 1,8 km/h
             gpsSince ??= Date.now(); // alleen wijzigen als gpsSince === null, anders laten staan
-          } else {
-            gpsSince = null;
-          }
+          } else gpsSince = null;
+        
           if (currentView === "compassView") updateArrow();
           else updateMap();
       },
@@ -120,19 +119,21 @@ function stopTracking() {
   }
   
   // fullscreen "overlay button" listener
-  const overlay = document.getElementById("userGestureOverlay").style;
-  overlay.display = "block";
-  overlay.pointerEvents = "auto";
+  const overlay = document.getElementById("userGestureOverlay");
+  overlay.style.display = "block";
+  overlay.style.pointerEvents = "auto";
   
   overlay.addEventListener("click", () => {
-    overlay.display = "none";
-    overlay.pointerEvents = "none";
+    overlay.style.display = "none";
+    overlay.style.pointerEvents = "none";
     startTracking();
   }, { once: true });
 }
 
 // COMPASS
 function handleOrientation(event) {
+  if (currentView !== "compassView") return;
+  
   let heading = null;
 
   if (!isNaN(event.webkitCompassHeading)) {
@@ -148,7 +149,9 @@ function handleOrientation(event) {
     hasOffset = true;
     currentHeading = 0;
   }
-  
+  if (gpsHeading !== null && gpsSpeed > 0.5) {
+    currentHeading = 0.9 * currentHeading + 0.1 * gpsHeading; // smoothing, maar ik betwijfel of het iets doet
+  }
   updateArrow();
 }
 
@@ -268,11 +271,12 @@ function updateArrow() {
   const UPDATE_INTERVAL = gpsSpeed >= 0.5 ? 1000 : 250;  // m/s en ms
   const now = Date.now();
   if (now - lastUpdate < UPDATE_INTERVAL) return;
-  if (!currentPosition || !target || gpxPoints.length === 0) return;
+  if (!currentPosition || gpxPoints.length === 0) return;
   lastUpdate = now;
 
   // Bepaal het "huidige target"
   let target = nextGPXPoint(currentPosition, gpxPoints);
+  if (!target) return;
 
   // GET BEARING
   const φ1 = degToRad(currentPosition.lat);
@@ -303,9 +307,8 @@ function updateArrow() {
   document.getElementById("arrowRotation").innerText = `${Math.round(-displayedRotation)}°`;
 
   // GEKLEURDE ACHTERGROND
-
   if (gpsSince !== null && gpsHeading !== null && now - gpsSince >= GPS_MIN_DURATION) {
-    diff = Math.abs(currentBearing - gpsHeading) % 360;
+    let diff = Math.abs(currentBearing - gpsHeading) % 360;
     if (diff > 45 || 360 - diff > 45) { // graden
       document.getElementById("arrow").style.backgroundColor = "red";
       navigator.vibrate?.(200);
