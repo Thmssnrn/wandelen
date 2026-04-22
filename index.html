@@ -23,19 +23,38 @@
 
 <body>
   <div id="userGestureOverlay"></div>
-    
+
   <div id="controls">
     <input type="file" id="gpxUpload" style="display:none" accept=".gpx">
     <label for="gpxUpload" id="fileButton">Selecteer bestand</label>
     
     <button id="startButton">Start kompas</button>
-  </div>
 
-  <div id="arrowRotation"></div>
-  <div id="arrow">↑</div>
+    <button id="tooggleView">Toon kaart</button>
+  </div>
   
-  <div id="distance">Restafstand: 0 km</div>
-  <div id="elevation">⭡ 0 m, ⭣ 0 m</div>
+  <!-- COMPASS VIEW -->
+  <div id="compassView" class="View active">
+
+    <div id="arrowRotation"></div>
+    <div id="arrow">↑</div>
+    
+    <div id="distance">Restafstand: 0 km</div>
+    <div id="elevation">⭡ 0 m, ⭣ 0 m</div>
+
+  </div>
+  
+  <!-- MAP VIEW -->
+  <div id="mapView" class="view">
+    <canvas id="mapCanvas"></canvas>
+    
+    <div id="mapOverlay">
+      <div id="progressText">0% voltooid</div>
+      <div id="remainingText">Nog 0 km</div>
+    </div>
+
+    <canvas id="elevationCanvas"></canvas>
+  </div>
 
   <div id="debug"></div>
   
