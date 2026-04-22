@@ -357,6 +357,10 @@ function updateArrow() {
 
 // PROJECTIE
 function project(lat, lon, bounds, width, height) {
+  console.log("gpxBounds in project functie:", bounds);
+  if (!bounds || bounds.minLat == null || bounds.minLon == null) {
+    console.error("gpxBounds is niet goed geïnitialiseerd", bounds);
+  }
   const x = (lon - bounds.minLon) / (bounds.maxLon - bounds.minLon);
   const y = (lat - bounds.minLat) / (bounds.maxLat - bounds.minLat);
 
