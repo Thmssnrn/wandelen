@@ -122,7 +122,7 @@ function stopTracking() {
   // fullscreen "overlay button" listener
   const overlay = document.getElementById("userGestureOverlay").style;
   overlay.display = "block";
-  overlay.display pointerEvents = "auto";
+  overlay.pointerEvents = "auto";
   
   overlay.addEventListener("click", () => {
     overlay.display = "none";
