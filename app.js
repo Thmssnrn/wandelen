@@ -388,13 +388,14 @@ function updateMap() {
   // afgelegd
   ctx.beginPath();
   for (let i = 0; i <= currentSegmentIndex; i++) {
-    console.error("gpxBounds is niet goed geïnitialiseerd", gpxBounds);
     const { x, y } = project(gpxPoints[i].lat, gpxPoints[i].lon, gpxBounds, ctx.canvas.width, ctx.canvas.height);
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   }
   ctx.strokeStyle = "#007AFF";
   ctx.stroke();
+
+  console.log("Afgelegd voltooid!");
 
   // resterend
   ctx.beginPath();
@@ -405,6 +406,8 @@ function updateMap() {
   }
   ctx.strokeStyle = "#ccc";
   ctx.stroke();
+
+  console.log("Resterend voltooid!");
 
   // USER LOCATION
   let { x, y } = project(
@@ -419,6 +422,8 @@ function updateMap() {
   ctx.arc(x, y, 8, 0, Math.PI * 2);
   ctx.fillStyle = "red";
   ctx.fill();
+
+  console.log("Locatie op kaart voltooid!");
   
   // HOOGTEPRROFIEL  
   const maxElev = Math.max(...gpxPoints.map(p => p.ele));
@@ -438,6 +443,8 @@ function updateMap() {
   elevCtx.strokeStyle = "#666";
   elevCtx.stroke();
 
+  console.log("Hoogteprofiel voltooid!");
+
   // huidige positie
   x = (currentSegmentIndex / gpxPoints.length) * elevCtx.canvas.width;
   elevCtx.beginPath();
@@ -445,9 +452,11 @@ function updateMap() {
   elevCtx.lineTo(x, elevCtx.canvas.height);
   elevCtx.strokeStyle = "red";
   elevCtx.stroke();
+
+  console.log("Locatie in profiel voltooid!");
   
-  document.getElementById("progressText").innerText = `${Math.round((currentSegmentIndex - 1) / gpxPoints.length * 100)}% voltooid`;
-  document.getElementById("remainingText").innerText = `Nog ${(gpxPoints[currentSegmentIndex].remainingDistance/1000).toFixed(1)} km`;
+  // document.getElementById("progressText").innerText = `${Math.round((currentSegmentIndex - 1) / gpxPoints.length * 100)}% voltooid`;
+  // document.getElementById("remainingText").innerText = `Nog ${(gpxPoints[currentSegmentIndex].remainingDistance/1000).toFixed(1)} km`;
 }
 
 
