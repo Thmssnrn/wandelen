@@ -569,7 +569,7 @@ toggleViewButton.onclick = () => {
     document.getElementById("compassView").classList.remove("active");
   
     currentView = "mapView";
-    updateArrow();
+    updateMap();
   }
   
   if (currentView === "mapView") {
@@ -578,7 +578,7 @@ toggleViewButton.onclick = () => {
     document.getElementById("mapView").classList.remove("active");
     
     currentView = "compassView";
-    updateMap();
+    updateArrow();
   }
 };
 
