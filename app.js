@@ -120,11 +120,13 @@ function stopTracking() {
   }
   
   // fullscreen "overlay button" listener
-  const overlay = document.getElementById("userGestureOverlay");
-  overlay.style.display = "block"; // Maak overlay klikbaar
+  const overlay = document.getElementById("userGestureOverlay").style;
+  overlay.display = "block";
+  overlay.display pointerEvents = "auto";
   
   overlay.addEventListener("click", () => {
-    overlay.style.display = "none";
+    overlay.display = "none";
+    overlay.pointerEvents = "none";
     startTracking();
   }, { once: true });
 }
