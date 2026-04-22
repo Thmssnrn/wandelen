@@ -564,11 +564,22 @@ if ("serviceWorker" in navigator) {
 
 // TOGGLE VIEW
 toggleViewButton.onclick = () => {
-  const otherView = currentView === "compassView" ? "mapView" : "compassView";
-  document.getElementById(otherView).classList.add("active");
-  document.getElementById(currentView).classList.remove("active");
-
-  currentView = otherView;
+  if (currentView === "compassView") {
+    document.getElementById("mapView").classList.add("active");
+    document.getElementById("compassView").classList.remove("active");
+  
+    currentView = "mapView";
+    updateArrow();
+  }
+  
+  if (currentView === "mapView") {
+    const otherView = "compassView"
+    document.getElementById("compassView").classList.add("active");
+    document.getElementById("mapView").classList.remove("active");
+    
+    currentView = "compassView";
+    updateMap();
+  }
 };
 
 // OVERLAY LISTENER
