@@ -481,96 +481,6 @@ function project(lat, lon, bounds, width, height) {
   };
 }
 
-function getBounds(points) {
-  return {
-    minLat: Math.min(...points.map(p => p.lat)),
-    maxLat: Math.max(...points.map(p => p.lat)),
-    minLon: Math.min(...points.map(p => p.lon)),
-    maxLon: Math.max(...points.map(p => p.lon))
-  };
-}
-
-function drawRoute(ctx, points, bounds) {
-  ctx.beginPath();
-
-  points.forEach((p, i) => {
-    const { x, y } = project(p.lat, p.lon, bounds, ctx.canvas.width, ctx.canvas.height);
-
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-
-  ctx.strokeStyle = "#888";
-  ctx.lineWidth = 4;
-  ctx.stroke();
-}
-
-function drawUser(ctx, userPos, bounds) {
-  const { x, y } = project(userPos.lat, userPos.lon, bounds, ctx.canvas.width, ctx.canvas.height);
-
-  ctx.beginPath();
-  ctx.arc(x, y, 8, 0, Math.PI * 2);
-  ctx.fillStyle = "red";
-  ctx.fill();
-}
-
-function getProgress(currentIndex, totalPoints) {
-  return currentIndex / totalPoints;
-}
-
-progressText.innerText = `${Math.round(progress * 100)}% voltooid`;
-remainingText.innerText = `Nog ${(remainingDistance/1000).toFixed(1)} km`;
-
-function drawProgressRoute(ctx, points, currentIndex, bounds) {
-  ctx.lineWidth = 4;
-
-  // afgelegd
-  ctx.beginPath();
-  for (let i = 0; i <= currentIndex; i++) {
-    const { x, y } = project(points[i].lat, points[i].lon, bounds, ctx.canvas.width, ctx.canvas.height);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.strokeStyle = "#007AFF";
-  ctx.stroke();
-
-  // resterend
-  ctx.beginPath();
-  for (let i = currentIndex; i < points.length; i++) {
-    const { x, y } = project(points[i].lat, points[i].lon, bounds, ctx.canvas.width, ctx.canvas.height);
-    if (i === currentIndex) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.strokeStyle = "#ccc";
-  ctx.stroke();
-}
-
-function drawElevation(ctx, points, currentIndex) {
-  const maxElev = Math.max(...points.map(p => p.ele));
-  const minElev = Math.min(...points.map(p => p.ele));
-
-  ctx.beginPath();
-
-  points.forEach((p, i) => {
-    const x = (i / points.length) * ctx.canvas.width;
-    const y = ctx.canvas.height - ((p.ele - minElev) / (maxElev - minElev)) * ctx.canvas.height;
-
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-
-  ctx.strokeStyle = "#666";
-  ctx.stroke();
-
-  // huidige positie
-  const x = (currentIndex / points.length) * ctx.canvas.width;
-  ctx.beginPath();
-  ctx.moveTo(x, 0);
-  ctx.lineTo(x, ctx.canvas.height);
-  ctx.strokeStyle = "red";
-  ctx.stroke();
-}
-
 // OVERZICHTSKAART
 function updateMap() {
   const canvas = document.getElementById("mapCanvas");
@@ -601,7 +511,7 @@ function updateMap() {
   ctx.stroke();
 
   // Teken de huidige locatie
-  const { x, y } = project(userPos.lat, userPos.lon, bounds, ctx.canvas.width, ctx.canvas.height);
+  let { x, y } = project(userPos.lat, userPos.lon, bounds, ctx.canvas.width, ctx.canvas.height);
 
   ctx.beginPath();
   ctx.arc(x, y, 8, 0, Math.PI * 2);
@@ -616,8 +526,8 @@ function updateMap() {
   elevCtx.beginPath();
 
   gpxPoints.forEach((p, i) => {
-    const x = (i / gpxPoints.length) * elevCtx.canvas.width;
-    const y = (1 - (p.ele - minElev) / (maxElev - minElev)) * elevCtx.canvas.height;
+    x = (i / gpxPoints.length) * elevCtx.canvas.width;
+    y = (1 - (p.ele - minElev) / (maxElev - minElev)) * elevCtx.canvas.height;
 
     if (i === 0) elevCtx.moveTo(x, y);
     else elevCtx.lineTo(x, y);
@@ -627,10 +537,13 @@ function updateMap() {
   elevCtx.stroke();
 
   // huidige positie
-  const x = (currentSegmentIndex / gpxPoints.length) * elevCtx.canvas.width;
+  x = (currentSegmentIndex / gpxPoints.length) * elevCtx.canvas.width;
   elevCtx.beginPath();
   elevCtx.moveTo(x, 0);
   elevCtx.lineTo(x, elevCtx.canvas.height);
   elevCtx.strokeStyle = "red";
   elevCtx.stroke();
+
+  progressText.innerText = `${Math.round(progress * 100)}% voltooid`;
+  remainingText.innerText = `Nog ${(remainingDistance/1000).toFixed(1)} km`;
 }
