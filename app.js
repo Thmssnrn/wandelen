@@ -464,7 +464,7 @@ if ("serviceWorker" in navigator) {
 }
 
 // TOGGLE VIEW
-document.getElementById("toggleView").onclick = () => {
+document.getElementById("toggleViewButton").onclick = () => {
   const otherView = currentView === "compassView" ? "mapView" : "compassView";
   document.getElementById(otherView).classList.add("active");
   document.getElementById(currentView).classList.remove("active");
