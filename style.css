@@ -4,6 +4,7 @@ body {
   color: white;
   font-family: ui-sans-serif, sans-serif;
   text-align: center;
+  overflow: hidden;
 }
 
 #userGestureOverlay {
@@ -23,7 +24,8 @@ body {
 }
 
 #startButton,
-#fileButton {
+#fileButton,
+#toggleViewButton {
   padding: 12px 20px;
   font-size: 16px;
   border: none;
@@ -31,6 +33,19 @@ body {
   background: #333;
   color: #fff;
   font-family: ui-sans-serif, sans-serif;
+}
+
+.view {
+  display: none;
+  height: 100vh;
+  width: 100vw;
+}
+
+.view.active {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 #arrow {
@@ -58,6 +73,34 @@ body {
   margin-top: 10px;
   font-size: 24px;
   font-family: ui-sans-serif, sans-serif;
+}
+
+#mapCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#mapOverlay {
+  position: absolute;
+  top: 60px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  pointer-events: none;
+}
+
+#progressText,
+#remainingText {
+  font-size: 18px;
+  margin: 4px 0;
+}
+
+#elevationCanvas {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: 120px;
 }
 
 #debug {
