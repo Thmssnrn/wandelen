@@ -22,6 +22,8 @@ const INACTIVITY_LIMIT = 30 * 1000; // 30 sec
 
 let lastUpdate = 0;
 
+let currentView = "compassView";
+
 // HELPERS
 function degToRad(φ) {
   return φ * Math.PI / 180;
@@ -459,4 +461,176 @@ document.addEventListener("visibilitychange", () => {
 // SERVICE WORKER
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("service-worker.js");
+}
+
+// TOGGLE VIEW
+document.getElementById("toggleView").onclick = () => {
+  const otherView = currentView === "compassView" ? "mapView" : "compassView";
+  document.getElementById(otherView).classList.add("active");
+  document.getElementById(currentView).classList.remove("active");
+};
+
+// PROJECTIE
+function project(lat, lon, bounds, width, height) {
+  const x = (lon - bounds.minLon) / (bounds.maxLon - bounds.minLon);
+  const y = (lat - bounds.minLat) / (bounds.maxLat - bounds.minLat);
+
+  return {
+    x: x * width,
+    y: height - (y * height)
+  };
+}
+
+function getBounds(points) {
+  return {
+    minLat: Math.min(...points.map(p => p.lat)),
+    maxLat: Math.max(...points.map(p => p.lat)),
+    minLon: Math.min(...points.map(p => p.lon)),
+    maxLon: Math.max(...points.map(p => p.lon))
+  };
+}
+
+function drawRoute(ctx, points, bounds) {
+  ctx.beginPath();
+
+  points.forEach((p, i) => {
+    const { x, y } = project(p.lat, p.lon, bounds, ctx.canvas.width, ctx.canvas.height);
+
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+
+  ctx.strokeStyle = "#888";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+}
+
+function drawUser(ctx, userPos, bounds) {
+  const { x, y } = project(userPos.lat, userPos.lon, bounds, ctx.canvas.width, ctx.canvas.height);
+
+  ctx.beginPath();
+  ctx.arc(x, y, 8, 0, Math.PI * 2);
+  ctx.fillStyle = "red";
+  ctx.fill();
+}
+
+function getProgress(currentIndex, totalPoints) {
+  return currentIndex / totalPoints;
+}
+
+progressText.innerText = `${Math.round(progress * 100)}% voltooid`;
+remainingText.innerText = `Nog ${(remainingDistance/1000).toFixed(1)} km`;
+
+function drawProgressRoute(ctx, points, currentIndex, bounds) {
+  ctx.lineWidth = 4;
+
+  // afgelegd
+  ctx.beginPath();
+  for (let i = 0; i <= currentIndex; i++) {
+    const { x, y } = project(points[i].lat, points[i].lon, bounds, ctx.canvas.width, ctx.canvas.height);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = "#007AFF";
+  ctx.stroke();
+
+  // resterend
+  ctx.beginPath();
+  for (let i = currentIndex; i < points.length; i++) {
+    const { x, y } = project(points[i].lat, points[i].lon, bounds, ctx.canvas.width, ctx.canvas.height);
+    if (i === currentIndex) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = "#ccc";
+  ctx.stroke();
+}
+
+function drawElevation(ctx, points, currentIndex) {
+  const maxElev = Math.max(...points.map(p => p.ele));
+  const minElev = Math.min(...points.map(p => p.ele));
+
+  ctx.beginPath();
+
+  points.forEach((p, i) => {
+    const x = (i / points.length) * ctx.canvas.width;
+    const y = ctx.canvas.height - ((p.ele - minElev) / (maxElev - minElev)) * ctx.canvas.height;
+
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+
+  ctx.strokeStyle = "#666";
+  ctx.stroke();
+
+  // huidige positie
+  const x = (currentIndex / points.length) * ctx.canvas.width;
+  ctx.beginPath();
+  ctx.moveTo(x, 0);
+  ctx.lineTo(x, ctx.canvas.height);
+  ctx.strokeStyle = "red";
+  ctx.stroke();
+}
+
+// OVERZICHTSKAART
+function updateMap() {
+  const canvas = document.getElementById("mapCanvas");
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+  // Teken de route
+  ctx.lineWidth = 4;
+
+  // afgelegd
+  ctx.beginPath();
+  for (let i = 0; i <= currentSegmentIndex; i++) {
+    const { x, y } = project(gpxPoints[i].lat, gpxPoints[i].lon, bounds, ctx.canvas.width, ctx.canvas.height);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = "#007AFF";
+  ctx.stroke();
+
+  // resterend
+  ctx.beginPath();
+  for (let i = currentSegmentIndex; i < gpxPoints.length; i++) {
+    const { x, y } = project(gpxPoints[i].lat, gpxPoints[i].lon, bounds, ctx.canvas.width, ctx.canvas.height);
+    if (i === currentSegmentIndex) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = "#ccc";
+  ctx.stroke();
+
+  // Teken de huidige locatie
+  const { x, y } = project(userPos.lat, userPos.lon, bounds, ctx.canvas.width, ctx.canvas.height);
+
+  ctx.beginPath();
+  ctx.arc(x, y, 8, 0, Math.PI * 2);
+  ctx.fillStyle = "red";
+  ctx.fill();
+  
+  // HOOGTEPRROFIEL
+  const elevCtx = document.getElementById("elevationCanvas").getContext("2d");
+  const maxElev = Math.max(...gpxPoints.map(p => p.ele));
+  const minElev = Math.min(...gpxPoints.map(p => p.ele));
+
+  elevCtx.beginPath();
+
+  gpxPoints.forEach((p, i) => {
+    const x = (i / gpxPoints.length) * elevCtx.canvas.width;
+    const y = (1 - (p.ele - minElev) / (maxElev - minElev)) * elevCtx.canvas.height;
+
+    if (i === 0) elevCtx.moveTo(x, y);
+    else elevCtx.lineTo(x, y);
+  });
+
+  elevCtx.strokeStyle = "#666";
+  elevCtx.stroke();
+
+  // huidige positie
+  const x = (currentSegmentIndex / gpxPoints.length) * elevCtx.canvas.width;
+  elevCtx.beginPath();
+  elevCtx.moveTo(x, 0);
+  elevCtx.lineTo(x, elevCtx.canvas.height);
+  elevCtx.strokeStyle = "red";
+  elevCtx.stroke();
 }
