@@ -1,5 +1,5 @@
 let gpxPoints = [];
-let currentPosition = null;
+let gpxBounds = null;
 
 let currentHeading = 0;
 let headingOffset = 0;
@@ -7,21 +7,21 @@ let hasOffset = false;
 
 let displayedRotation = 0;
 let currentBearing = 0;
-let currentSegmentIndex = 0;
 
+let currentPosition = null;
 let gpsHeading = null;
 let gpsSpeed = 0;
 let gpsSince = null;
-const GPS_MIN_DURATION = 3000; // 3 seconden
+const GPS_MIN_DURATION = 3000; // 3 sec
 
 let watchId = null;
 let orientationActive = false;
 
 let inactivityTimeout = null;
-const INACTIVITY_LIMIT = 30 * 1000; // 30 sec
+const INACTIVITY_LIMIT = 30000; // 30 sec
 
+let currentSegmentIndex = 0;
 let lastUpdate = 0;
-
 let currentView = "compassView";
 
 // HELPERS
@@ -52,6 +52,9 @@ async function startTracking() {
     window.addEventListener("deviceorientation", handleOrientation);
     orientationActive = true;
   }
+  
+  // Reset offset
+  hasOffset = false;
 
   // Start GPS
   if (watchId === null) {
@@ -70,8 +73,8 @@ async function startTracking() {
           } else {
             gpsSince = null;
           }
-
-          updateArrow();
+          if (currentView === "compassView") updateArrow();
+          else updateMap();
       },
       (err) => console.error(err),
       { // Configureer GPS:
@@ -83,9 +86,12 @@ async function startTracking() {
   }
 
   // Start User Inactivity Listeners
-  const events = ["mousemove", "mousedown", "touchstart", "keydown", "scroll"];
+  const events = ["mousedown", "touchstart", "scroll"];
   events.forEach(event => {
-    document.addEventListener(event, resetUserInactivityTimer, { passive: true });
+    document.addEventListener(event, () => {
+      if (inactivityTimeout) clearTimeout(inactivityTimeout);
+      inactivityTimeout = setTimeout(stopTracking, INACTIVITY_LIMIT);
+    }, { passive: true });
   });
 
   // Start User Inactivity Timer
@@ -117,10 +123,10 @@ function stopTracking() {
   const overlay = document.getElementById("userGestureOverlay");
   overlay.style.display = "block"; // Maak overlay klikbaar
   
-  overlay.onclick = () => {
+  overlay.addEventListener("click", () => {
     overlay.style.display = "none";
     startTracking();
-  };
+  }, { once: true });
 }
 
 // COMPASS
@@ -260,7 +266,7 @@ function updateArrow() {
   const UPDATE_INTERVAL = gpsSpeed >= 0.5 ? 1000 : 250;  // m/s en ms
   const now = Date.now();
   if (now - lastUpdate < UPDATE_INTERVAL) return;
-  if (!currentPosition || gpxPoints.length === 0) return;
+  if (!currentPosition || !target || gpxPoints.length === 0) return;
   lastUpdate = now;
 
   // Bepaal het "huidige target"
@@ -367,21 +373,15 @@ function updateMap() {
     
   const canvas = document.getElementById("mapCanvas");
   const ctx = canvas.getContext("2d");
-  const bounds = {
-    minLat: Math.min(...gpxPoints.map(p => p.lat)) - 0.002,
-    maxLat: Math.max(...gpxPoints.map(p => p.lat)) + 0.002,
-    minLon: Math.min(...gpxPoints.map(p => p.lon)) - 0.002,
-    maxLon: Math.max(...gpxPoints.map(p => p.lon)) + 0.002
-  };
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+  
   // ROUTE
   ctx.lineWidth = 4;
 
   // afgelegd
   ctx.beginPath();
   for (let i = 0; i <= currentSegmentIndex; i++) {
-    const { x, y } = project(gpxPoints[i].lat, gpxPoints[i].lon, bounds, ctx.canvas.width, ctx.canvas.height);
+    const { x, y } = project(gpxPoints[i].lat, gpxPoints[i].lon, gpxBounds, ctx.canvas.width, ctx.canvas.height);
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   }
@@ -391,7 +391,7 @@ function updateMap() {
   // resterend
   ctx.beginPath();
   for (let i = currentSegmentIndex; i < gpxPoints.length; i++) {
-    const { x, y } = project(gpxPoints[i].lat, gpxPoints[i].lon, bounds, ctx.canvas.width, ctx.canvas.height);
+    const { x, y } = project(gpxPoints[i].lat, gpxPoints[i].lon, gpxBounds, ctx.canvas.width, ctx.canvas.height);
     if (i === currentSegmentIndex) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   }
@@ -402,7 +402,7 @@ function updateMap() {
   let { x, y } = project(
     currentPosition.lat,
     currentPosition.lon,
-    bounds,
+    gpxBounds,
     ctx.canvas.width,
     ctx.canvas.height
   );
@@ -437,9 +437,9 @@ function updateMap() {
   elevCtx.lineTo(x, elevCtx.canvas.height);
   elevCtx.strokeStyle = "red";
   elevCtx.stroke();
-
-  progressText.innerText = `${Math.round(progress * 100)}% voltooid`;
-  remainingText.innerText = `Nog ${(remainingDistance/1000).toFixed(1)} km`;
+  
+  document.getElementById("progressText").innerText = `${Math.round((currentSegmentIndex - 1) / gpxPoints.length * 100)}% voltooid`;
+  document.getElementById("remainingText").innerText = `Nog ${(gpxPoints[currentSegmentIndex].remainingDistance/1000).toFixed(1)} km`;
 }
 
 
@@ -457,7 +457,7 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
     const parser = new DOMParser();
     const xml = parser.parseFromString(event.target.result, "text/xml");
     
-    const trkpts = xml.getElementsByTagName("trkpt");
+    let trkpts = xml.getElementsByTagName("trkpt");
     if (xml.getElementsByTagName("parsererror").length > 0) {
       alert("Fout bij het lezen van GPX-bestand");
       return;
@@ -514,7 +514,29 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
         distance += distanceMeters(gpxPoints[i], gpxPoints[i - 1]);
       }
     }
+
+    // Bereken alvast de bounds voor de kaart
+    gpxBounds = {
+      minLat: Infinity,
+      maxLat: -Infinity,
+      minLon: Infinity,
+      maxLon: -Infinity
+    };
     
+    gpxPoints.forEach(p => {
+      gpxBounds.minLat = Math.min(bounds.minLat, p.lat);
+      gpxBounds.maxLat = Math.max(bounds.maxLat, p.lat);
+      gpxBounds.minLon = Math.min(bounds.minLon, p.lon);
+      gpxBounds.maxLon = Math.max(bounds.maxLon, p.lon);
+    });
+    
+    // marge toevoegen
+    gpxBounds.minLat -= gpxPoints.length / 100000;
+    gpxBounds.maxLat += gpxPoints.length / 100000;
+    gpxBounds.minLon -= gpxPoints.length / 100000;
+    gpxBounds.maxLon += gpxPoints.length / 100000;
+    
+    // globaal opslaan    
     localStorage.setItem("gpxPoints", JSON.stringify(gpxPoints));
     currentSegmentIndex = 0;
     alert(`GPX geladen met ${gpxPoints.length} punten`);
