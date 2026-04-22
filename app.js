@@ -26,10 +26,10 @@ let currentView = "compassView";
 // HTML elements
 const overlay = document.getElementById("userGestureOverlay");
 const arrow = document.getElementById("arrow");
-const arrowRotationText = document.getElementById("arrowRotation").innerText;
-const distanceText = document.getElementById("distance").innerText;
+const arrowRotationText = document.getElementById("arrowRotation");
+const distanceText = document.getElementById("distance");
 const elevation = document.getElementById("elevation");
-const debugHTML = document.getElementById("debug").innerHTML;
+const debugHTML = document.getElementById("debug");
 const mapCanvas = document.getElementById("mapCanvas");
 const elevCtx = document.getElementById("elevationCanvas").getContext("2d");
 const startButton = document.getElementById("startButton");
@@ -82,7 +82,7 @@ async function startTracking() {
           const now = Date.now();
           if (gpsSpeed < 2) gpsSince = Infinity;
           else {
-            gpsSince = min(gpsSince, now);
+            gpsSince = Math.min(gpsSince, now);
             if (previousPosition !== null && gpsHeading === null && now - gpsSince >= 3000) {
               const radian = Math.PI / 180;
               lat1 = degToRad(previousPosition.lat);
@@ -149,7 +149,6 @@ function stopTracking() {
   // fullscreen "overlay button" listener
   overlay.style.display = "block";
   overlay.style.pointerEvents = "auto";
-  overlay.addEventListener("click", startTracking, { once: true });
 }
 
 // COMPASS
@@ -322,16 +321,16 @@ function updateArrow() {
     arrow.style.transition = "transform 0.25s linear";
   }
   arrow.style.transform = `rotate(${displayedRotation}deg)`;
-  arrowRotationText = `${Math.round(-displayedRotation)}°`;
+  arrowRotationText.innerText = `${Math.round(-displayedRotation)}°`;
 
   // GEKLEURDE ACHTERGROND
-  if (gpsHeading !== null && now - gpsSince >= 3000) {
+  if (gpsHeading !== null && Date.now() - gpsSince >= 3000) {
     let diff = Math.abs(currentBearing - gpsHeading) % 360;
     if (diff > 45 || 360 - diff > 45) { // graden
-      document.arrow.style.backgroundColor = "red";
+      arrow.style.backgroundColor = "red";
       navigator.vibrate?.(200);
     } else {
-      document.arrow.style.backgroundColor = "white";
+      arrow.style.backgroundColor = "white";
     }
   }
 
@@ -347,7 +346,7 @@ function updateArrow() {
   elevation.innerText = `⭡ ${elev.remainingAscent} m, ⭣ ${elev.remainingDescent} m`;
 
   // DEBUG
-  debugHTML = `
+  debugHTML.innerHTML = `
     <b>Positie</b><br>
     ${currentPosition.lat.toFixed(6)}, ${currentPosition.lon.toFixed(6)}<br><br>
 
@@ -387,7 +386,7 @@ function project(lat, lon, bounds, width, height) {
 // OVERZICHTSKAART
 function updateMap() {
   if (currentView !== "mapView") return;
-  const UPDATE_INTERVAL = 60000;  // ms
+  const UPDATE_INTERVAL = 30000;  // 30 sec
   const now = Date.now();
   if (now - lastUpdate < UPDATE_INTERVAL) return;
   if (!currentPosition || gpxPoints.length === 0) return;
@@ -433,12 +432,13 @@ function updateMap() {
   ctx.fillStyle = "red";
   ctx.fill();
   
-  // HOOGTEPRROFIEL
+  // HOOGTEPRROFIEL  
   const maxElev = Math.max(...gpxPoints.map(p => p.ele));
   const minElev = Math.min(...gpxPoints.map(p => p.ele));
 
+  elevCtx.clearRect(0, 0, elevCtx.canvas.width, elevCtx.canvas.height);
   elevCtx.beginPath();
-
+  
   gpxPoints.forEach((p, i) => {
     x = (i / gpxPoints.length) * elevCtx.canvas.width;
     y = (1 - (p.ele - minElev) / (maxElev - minElev)) * elevCtx.canvas.height;
@@ -588,3 +588,24 @@ toggleViewButton.onclick = () => {
 
   currentView = otherView;
 };
+
+// OVERLAY LISTENER
+overlay.addEventListener("click", startTracking, { once: true });
+
+// Verbeterpunten tijdens ontwikkelen:
+// * Baterijoptimalisatie:
+// - Als de gebruiker beweegt kijkt hij niet naar de app maar om zich heen; alleen als hij stilstaat hoef je de informatie bij te werken.
+// - Je kunt ook stoppen met het updaten van de DOM, maar ik vraag me af of dat verschil maakt.
+// - Je kunt een energiebesparende modus toevoegen, die HighAccuracy op false zet en de huidige locatie vrijwel altijd projecteert op de route.
+// * Het klopt niet om ervan uit te gaan dat de gebruiker de iPhone naar het noorden richt als hij op 'start' drukt.
+
+// Verbeterpunten tijdens testen 1:
+// * We kunnen ook een knop toevoegen dat de gebruiker ergens al geweest is, die de currentSegmentIndex verhoogt, en/of een knop die aangeeft dat de kant die de pijl op wijst niet mogelijk is (geen pad), die het zoekbereik tijdelijk uitschakelt.
+// * Resterende tijd tonen a.d.h.v. de GPX-data (geen moving average, want ik wil het ook gebruiken in de bergen e.d.) + percentage van de tijd tonen die je gelopen hebt op dit punt volgens de GPX-data.
+// * Resterende afstand tot volgende punt tonen (maar met ondersteuning voor de draaihoek op punt volgende punt X: als |hoek|<20 dan (afstand huidige positie → X) + (afstand X→X+1) i.p.v. alleen huidig→X).
+// * Totale afstand tonen?
+
+// Verbeterpunten tijdens testen 2:
+// * Beperkt aantal verhogingen segment-index per minuut?
+// * Hoogtemeters afronden
+// * Iets doen bij aankomst: functioneel of voor het gevoel of een combinatie daarvan.
