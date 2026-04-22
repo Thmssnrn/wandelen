@@ -325,7 +325,7 @@ function updateArrow() {
 
   // HOOGTEMETERS
   const elev = gpxPoints[currentSegmentIndex];
-  elevation.style.display = (gpxPoints[0] < 75 && gpxPoints[0] < 75) ? "none" : "block";
+  elevation.style.display = (gpxPoints[0].remainingAscent > 75 && gpxPoints[0].remainingDescent > 75) ? "block" : "none";
   elevation.innerText = `⭡ ${Math.round(elev.remainingAscent)} m, ⭣ ${Math.round(elev.remainingDescent)} m`;
   
   // DEBUG
@@ -412,7 +412,7 @@ function updateMap() {
   ctx.fill();
   
   // HOOGTEPRROFIEL  
-  if (gpxPoints[0] ? 75 && gpxPoints[0] ? 75) {
+  if (gpxPoints[0].remainingAscent > 75 && gpxPoints[0].remainingDescent > 75) {
     const maxElev = Math.max(...gpxPoints.map(p => p.ele));
     const minElev = Math.min(...gpxPoints.map(p => p.ele));
     
