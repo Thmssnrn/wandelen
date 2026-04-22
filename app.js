@@ -384,7 +384,7 @@ function updateMap() {
   // afgelegd
   ctx.beginPath();
   for (let i = 0; i <= currentSegmentIndex; i++) {
-    console.error("gpxBounds is niet goed geïnitialiseerd", bounds);
+    console.error("gpxBounds is niet goed geïnitialiseerd", gpxBounds);
     const { x, y } = project(gpxPoints[i].lat, gpxPoints[i].lon, gpxBounds, ctx.canvas.width, ctx.canvas.height);
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
