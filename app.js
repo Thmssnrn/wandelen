@@ -117,6 +117,9 @@ async function startTracking() {
   // Verwijder overlay
   overlay.style.display = "none";
   overlay.style.pointerEvents = "none";
+
+  // Laad de kaart expliciet
+  if (currentView === "mapView") updateMap();
 }
 
 // PAUZE
@@ -334,8 +337,6 @@ function updateArrow() {
 
     <b>Kompas</b><br>
     heading: ${currentHeading.toFixed(2)}°<br>
-    offset: ${headingOffset.toFixed(2)}<br>
-    hasOffset: ${hasOffset}<br><br>
 
     <b>Routing</b><br>
     bearing: ${currentBearing.toFixed(2)}°<br>
