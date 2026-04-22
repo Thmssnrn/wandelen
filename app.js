@@ -353,10 +353,6 @@ function updateArrow() {
 
 // PROJECTIE
 function project(lat, lon, bounds, width, height) {
-  console.log("gpxBounds in project functie:", bounds);
-  if (!bounds || bounds.minLat == null || bounds.minLon == null) {
-    console.error("gpxBounds is niet goed geïnitialiseerd", bounds);
-  }
   const x = (lon - bounds.minLon) / (bounds.maxLon - bounds.minLon);
   const y = (lat - bounds.minLat) / (bounds.maxLat - bounds.minLat);
 
@@ -391,8 +387,6 @@ function updateMap() {
   ctx.strokeStyle = "#007AFF";
   ctx.stroke();
 
-  console.log("Afgelegd voltooid!");
-
   // resterend
   ctx.beginPath();
   for (let i = currentSegmentIndex; i < gpxPoints.length; i++) {
@@ -402,8 +396,6 @@ function updateMap() {
   }
   ctx.strokeStyle = "#ccc";
   ctx.stroke();
-
-  console.log("Resterend voltooid!");
 
   // USER LOCATION
   let { x, y } = project(
@@ -418,41 +410,37 @@ function updateMap() {
   ctx.arc(x, y, 5, 0, Math.PI * 2);
   ctx.fillStyle = "red";
   ctx.fill();
-
-  console.log("Locatie op kaart voltooid!");
   
   // HOOGTEPRROFIEL  
-  const maxElev = Math.max(...gpxPoints.map(p => p.ele));
-  const minElev = Math.min(...gpxPoints.map(p => p.ele));
-
-  elevCtx.clearRect(0, 0, elevCtx.canvas.width, elevCtx.canvas.height);
-  elevCtx.beginPath();
+  if (gpxPoints[0] ? 75 && gpxPoints[0] ? 75) {
+    const maxElev = Math.max(...gpxPoints.map(p => p.ele));
+    const minElev = Math.min(...gpxPoints.map(p => p.ele));
+    
+    elevCtx.clearRect(0, 0, elevCtx.canvas.width, elevCtx.canvas.height);
+    elevCtx.beginPath();
+    
+    gpxPoints.forEach((p, i) => {
+      x = (i / gpxPoints.length) * elevCtx.canvas.width;
+      y = (1 - (p.ele - minElev) / (maxElev - minElev)) * elevCtx.canvas.height;
   
-  gpxPoints.forEach((p, i) => {
-    x = (i / gpxPoints.length) * elevCtx.canvas.width;
-    y = (1 - (p.ele - minElev) / (maxElev - minElev)) * elevCtx.canvas.height;
-
-    if (i === 0) elevCtx.moveTo(x, y);
-    else elevCtx.lineTo(x, y);
-  });
-
-  elevCtx.strokeStyle = "#666";
-  elevCtx.stroke();
-
-  console.log("Hoogteprofiel voltooid!");
-
-  // huidige positie
-  x = (currentSegmentIndex / gpxPoints.length) * elevCtx.canvas.width;
-  elevCtx.beginPath();
-  elevCtx.moveTo(x, 0);
-  elevCtx.lineTo(x, elevCtx.canvas.height);
-  elevCtx.strokeStyle = "red";
-  elevCtx.stroke();
-
-  console.log("Locatie in profiel voltooid!");
+      if (i === 0) elevCtx.moveTo(x, y);
+      else elevCtx.lineTo(x, y);
+    });
   
-  // document.getElementById("progressText").innerText = `${Math.round((currentSegmentIndex - 1) / gpxPoints.length * 100)}% voltooid`;
-  // document.getElementById("remainingText").innerText = `Nog ${(gpxPoints[currentSegmentIndex].remainingDistance/1000).toFixed(1)} km`;
+    elevCtx.strokeStyle = "#666";
+    elevCtx.stroke();
+    
+    // huidige positie
+    x = (currentSegmentIndex / gpxPoints.length) * elevCtx.canvas.width;
+    elevCtx.beginPath();
+    elevCtx.moveTo(x, 0);
+    elevCtx.lineTo(x, elevCtx.canvas.height);
+    elevCtx.strokeStyle = "red";
+    elevCtx.stroke();
+  }
+  
+  document.getElementById("progressText").innerText = `${Math.round((currentSegmentIndex - 1) / gpxPoints.length * 100)}% voltooid`;
+  document.getElementById("remainingText").innerText = `Nog ${(gpxPoints[currentSegmentIndex].remainingDistance/1000).toFixed(1)} km`;
 }
 
 
