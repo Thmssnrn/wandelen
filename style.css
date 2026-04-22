@@ -4,6 +4,7 @@ body {
   color: white;
   font-family: ui-sans-serif, sans-serif;
   text-align: center;
+  overflow: auto;
 }
 
 #userGestureOverlay {
@@ -14,6 +15,7 @@ body {
   z-index: 9999;
   background: rgba(0, 0, 0, 0.5);
   pointer-events: none;
+  overflow: auto;
 }
 
 #controls {
@@ -82,13 +84,13 @@ body {
 }
 
 #mapOverlay {
-  position: absolute;
   top: 60px;
   left: 0;
   width: 100%;
   text-align: center;
   pointer-events: none;
 }
+
 
 #progressText,
 #remainingText {
@@ -97,7 +99,6 @@ body {
 }
 
 #elevationCanvas {
-  position: absolute;
   bottom: 0;
   width: 100%;
   height: 120px;
