@@ -117,9 +117,6 @@ async function startTracking() {
   // Verwijder overlay
   overlay.style.display = "none";
   overlay.style.pointerEvents = "none";
-
-  // Laad de kaart expliciet
-  if (currentView === "mapView") updateMap();
 }
 
 // PAUZE
@@ -382,7 +379,7 @@ function updateMap() {
   ctx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
   
   // ROUTE
-  ctx.lineWidth = 4;
+  ctx.lineWidth = 3;
 
   // afgelegd
   ctx.beginPath();
@@ -418,7 +415,7 @@ function updateMap() {
   );
 
   ctx.beginPath();
-  ctx.arc(x, y, 8, 0, Math.PI * 2);
+  ctx.arc(x, y, 5, 0, Math.PI * 2);
   ctx.fillStyle = "red";
   ctx.fill();
 
@@ -575,18 +572,33 @@ if ("serviceWorker" in navigator) {
 
 // TOGGLE VIEW
 toggleViewButton.onclick = () => {
-  console.log("toggleViewButton aangeroepen met currentView", currentView);
-
   document.getElementById(currentView).classList.remove("active");
   lastUpdate = 0;
   
   if (currentView === "compassView") {
     document.getElementById("mapView").classList.add("active");
     currentView = "mapView";
+
+    toggleViewButton.innerText = "Verberg kaart";
+
+    // Stop kompas en timer
+    if (orientationActive) {
+      window.removeEventListener("deviceorientation", handleOrientation);
+      orientationActive = false;
+    }
+    if (inactivityTimeout) {
+      clearTimeout(inactivityTimeout);
+      inactivityTimeout = null;
+    }
     updateMap();
+    
   } else {
     document.getElementById("compassView").classList.add("active");    
     currentView = "compassView";
+    
+    toggleViewButton.innerText = "Toon kaart";
+    
+    await startCompass();
     updateArrow();
   }
 };
@@ -599,8 +611,9 @@ overlay.addEventListener("click", startTracking, { once: true });
 // - Als de gebruiker beweegt kijkt hij niet naar de app maar om zich heen; alleen als hij stilstaat hoef je de informatie bij te werken.
 // - Je kunt ook stoppen met het updaten van de DOM, maar ik vraag me af of dat verschil maakt.
 // - Je kunt een energiebesparende modus toevoegen, die HighAccuracy op false zet en de huidige locatie vrijwel altijd projecteert op de route.
-// * De kaart wordt niet getoond als de gebruiker op de knop drukt.
 // * Het label van de 'toon kaart'-knop moet bijgewerkt worden als de kaart al getoond wordt.
+// * De overlay listener werkt op deze manier maar éénmalig, en dat is niet de bedoeling.
+// * Is het nog nodig om het GPS-pollen te stoppen als de kaart wordt getoond?
 
 // Verbeterpunten tijdens testen 1:
 // * We kunnen ook een knop toevoegen dat de gebruiker ergens al geweest is, die de currentSegmentIndex verhoogt, en/of een knop die aangeeft dat de kant die de pijl op wijst niet mogelijk is (geen pad), die het zoekbereik tijdelijk uitschakelt.
