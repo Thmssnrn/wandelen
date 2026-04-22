@@ -328,15 +328,14 @@ function updateArrow() {
 
   // HOOGTEMETERS
   const elev = gpxPoints[currentSegmentIndex];
-  elevation.innerText = `⭡ ${elev.remainingAscent} m, ⭣ ${elev.remainingDescent} m`;
-
+  elevation.style.display = (gpxPoints[0] < 75 && gpxPoints[0] < 75) ? "none" : "block";
+  elevation.innerText = `⭡ ${Math.round(elev.remainingAscent)} m, ⭣ ${Math.round(elev.remainingDescent)} m`;
+  
   // DEBUG
   debugHTML.innerHTML = `
-    <b>Positie</b><br>
-    ${currentPosition.lat.toFixed(6)}, ${currentPosition.lon.toFixed(6)}<br><br>
-
-    <b>Kompas</b><br>
-    heading: ${currentHeading.toFixed(2)}°<br>
+    <b>Positie en kompas</b><br>
+    ${currentPosition.lat.toFixed(6)}, ${currentPosition.lon.toFixed(6)}<br>
+    heading: ${currentHeading.toFixed(2)}°<br><br>
 
     <b>Routing</b><br>
     bearing: ${currentBearing.toFixed(2)}°<br>
@@ -515,9 +514,6 @@ uploadButton.addEventListener("change", function(e) {
       }
     }
 
-    // Verberg de hoogtemeter-data bij vlakke routes
-    elevation.style.display = (ascent < 75 && descent < 75) ? "none" : "block";
-
     // Bereken alvast de afstand
     let distance = 0
     for (let i = gpxPoints.length - 1; i >= 0; i--) {
@@ -549,8 +545,7 @@ uploadButton.addEventListener("change", function(e) {
     gpxBounds.minLon -= gpxPoints.length / 100000;
     gpxBounds.maxLon += gpxPoints.length / 100000;
     
-    // globaal opslaan    
-    localStorage.setItem("gpxPoints", JSON.stringify(gpxPoints));
+    // Voltooien    
     currentSegmentIndex = 0;
     alert(`GPX geladen met ${gpxPoints.length} punten`);
   };
@@ -559,9 +554,10 @@ uploadButton.addEventListener("change", function(e) {
 });
 
 // Load saved GPX
-const saved = localStorage.getItem("gpxPoints");
+let saved = localStorage.getItem("gpxPoints");
 if (saved) gpxPoints = JSON.parse(saved);
-
+saved = localStorage.getItem("gpxBounds");
+if (saved) gpxBounds = JSON.parse(saved);
 
 // VISIBILITY API
 document.addEventListener("visibilitychange", () => {
