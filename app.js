@@ -576,19 +576,16 @@ if ("serviceWorker" in navigator) {
 // TOGGLE VIEW
 toggleViewButton.onclick = () => {
   console.log("toggleViewButton aangeroepen met currentView", currentView);
+
+  document.getElementById(currentView).classList.remove("active");
+  lastUpdate = 0;
+  
   if (currentView === "compassView") {
     document.getElementById("mapView").classList.add("active");
-    document.getElementById("compassView").classList.remove("active");
-  
     currentView = "mapView";
     updateMap();
-  }
-  
-  if (currentView === "mapView") {
-    const otherView = "compassView"
-    document.getElementById("compassView").classList.add("active");
-    document.getElementById("mapView").classList.remove("active");
-    
+  } else {
+    document.getElementById("compassView").classList.add("active");    
     currentView = "compassView";
     updateArrow();
   }
