@@ -80,7 +80,7 @@ async function startTracking() {
           gpsSpeed = pos.coords.speed * 3.6; // m/s -> km/h
 
           const now = Date.now();
-          if (gpsSpeed < 2) gpsSince = now + 5000;
+          if (gpsSpeed < 2) gpsSince = Infinity;
           else {
             gpsSince = min(gpsSince, now);
             if (previousPosition !== null && gpsHeading === null && now - gpsSince >= 3000) {
@@ -155,9 +155,13 @@ function stopTracking() {
 // COMPASS
 function handleOrientation(event) {
   if (currentView !== "compassView") return;
+  const UPDATE_INTERVAL = gpsSpeed > 2 ? 1000 : 250;  // m/s en ms
+  const now = Date.now();
+  if (now - lastUpdate < UPDATE_INTERVAL) return;
+  if (currentView !== "compassView") return;
+  lastUpdate = now;
   
-  let heading = null;
-
+  let heading;
   if (!isNaN(event.webkitCompassHeading)) {
     heading = event.webkitCompassHeading;
   } else if (!isNaN(event.alpha)) {
@@ -289,13 +293,8 @@ function distanceMeters(loc1, loc2) {
 
 // UPDATE ARROW
 function updateArrow() {
-  if (currentView !== "compassView") return;
-  const UPDATE_INTERVAL = gpsSpeed > 2 ? 1000 : 250;  // m/s en ms
-  const now = Date.now();
-  if (now - lastUpdate < UPDATE_INTERVAL) return;
   if (!currentPosition || gpxPoints.length === 0) return;
-  lastUpdate = now;
-
+  
   // Bepaal het "huidige target"
   let target = nextGPXPoint(currentPosition, gpxPoints);
   if (!target) return;
