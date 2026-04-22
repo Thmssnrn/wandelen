@@ -565,6 +565,7 @@ if ("serviceWorker" in navigator) {
 
 // TOGGLE VIEW
 toggleViewButton.onclick = () => {
+  console.log("toggleViewButton:", toggleViewButton, "met currentView", currentView);
   if (currentView === "compassView") {
     document.getElementById("mapView").classList.add("active");
     document.getElementById("compassView").classList.remove("active");
