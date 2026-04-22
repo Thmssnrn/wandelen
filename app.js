@@ -86,7 +86,7 @@ async function startTracking() {
   }
 
   // Start User Inactivity Listeners
-  const events = ["mousedown", "touchstart", "scroll"];
+  const events = ["mousedown", "touchstart"];
   events.forEach(event => {
     document.addEventListener(event, () => {
       if (inactivityTimeout) clearTimeout(inactivityTimeout);
@@ -524,10 +524,10 @@ document.getElementById("gpxUpload").addEventListener("change", function(e) {
     };
     
     gpxPoints.forEach(p => {
-      gpxBounds.minLat = Math.min(bounds.minLat, p.lat);
-      gpxBounds.maxLat = Math.max(bounds.maxLat, p.lat);
-      gpxBounds.minLon = Math.min(bounds.minLon, p.lon);
-      gpxBounds.maxLon = Math.max(bounds.maxLon, p.lon);
+      gpxBounds.minLat = Math.min(gpxBounds.minLat, p.lat);
+      gpxBounds.maxLat = Math.max(gpxBounds.maxLat, p.lat);
+      gpxBounds.minLon = Math.min(gpxBounds.minLon, p.lon);
+      gpxBounds.maxLon = Math.max(gpxBounds.maxLon, p.lon);
     });
     
     // marge toevoegen
