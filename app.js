@@ -586,7 +586,7 @@ toggleViewButton.onclick = () => {
     
     toggleViewButton.innerText = "Toon kaart";
     
-    await startCompass();
+    await startTracking();
     updateArrow();
   }
 };
