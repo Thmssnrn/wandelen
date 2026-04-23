@@ -175,25 +175,22 @@ function nextGPXPoint(pos, points) {
   const start = Math.max(0, currentSegmentIndex - BACKWARD_WINDOW);
   const end = Math.min(points.length - 1, currentSegmentIndex + FORWARD_WINDOW);
 
+  const cosLat = Math.cos(degToRad(pos.lat));
+
   // Zoek lokaal
   for (let i = start; i < end; i++) {
     // Projectie -> afstand tot het segment ipv het punt
-    const A = points[i];
-    const B = points[i + 1];
-
-    const scale = Math.cos(degToRad(A.lat + B.lat) / 2);
-    const dx = (B.lon - A.lon) * scale;
-    const dy = B.lat - A.lat;
-
-    const t = ((pos.lat - A.lat) * dy + (pos.lon - A.lon) * dx) / (dx*dx + dy*dy);
+    const point = points[i];
+    
+    const t = ((pos.lat - point.lat) * point.dy + (pos.lon - point.lon) * point.dx) / point.lenSq;
     const tClamped = Math.max(0, Math.min(1, t));
 
-    const proj = {
-      lat: A.lat + tClamped * dy,
-      lon: A.lon + tClamped * dx / scale
-    };
+    projLat = point.lat + tClamped * point.dy,
+    projLon = point.lon + tClamped * point.dx / point.scale
 
-    const d = distanceMeters(pos, proj);
+    const x = degToRad(projLon - pos.lon) * cosLat;
+    const y = degToRad(projLat - pos.lat);
+    const d = x*x + y*y;
 
     if (d < minDist) {
       minDist = d;
@@ -202,24 +199,22 @@ function nextGPXPoint(pos, points) {
   }
 
   // Fallback als we te ver weg zitten → globale search
-  if (minDist > 50) {
+  if (minDist > (50 / 6371000) ** 2 { // minDist > 50 meter
     for (let i = 0; i < points.length - 1; i++) {
+      if (i >= start && i < end) continue;
+      
       // Projectie -> afstand tot het segment ipv het punt
-      const A = points[i];
-      const B = points[i + 1];
+      const point = points[i];
 
-      const dx = B.lon - A.lon;
-      const dy = B.lat - A.lat;
-
-      const t = ((pos.lat - A.lat) * dy + (pos.lon - A.lon) * dx) / (dx*dx + dy*dy);
+      const t = ((pos.lat - point.lat) * point.dy + (pos.lon - point.lon) * point.dx) / point.lenSq;
       const tClamped = Math.max(0, Math.min(1, t));
 
-      const proj = {
-        lat: A.lat + tClamped * dy,
-        lon: A.lon + tClamped * dx
-      };
+      projLat = point.lat + tClamped * point.dy,
+      projLon = point.lon + tClamped * point.dx / point.scale
 
-      const d = distanceMeters(pos, proj);
+      const x = degToRad(projLon - pos.lon) * cosLat;
+      const y = degToRad(projLat - pos.lat);
+      d = x*x + y*y;
 
       if (d < minDist) {
         minDist = d;
@@ -237,20 +232,19 @@ function nextGPXPoint(pos, points) {
 
   // LOOK-AHEAD LOGICA bij bochten
   if (currentSegmentIndex < gpxPoints.length - 1) {
-    const distToNext = distanceMeters(currentPosition, target);
+    const x = degToRad(target.lon - pos.lon) * cosLat;
+    const y = degToRad(target.lat - pos.lat);    
+    const distSq = x*x + y*y;
 
-    if (distToNext < 30) {
-      const lookAheadMeters = Math.max(0, 30 - distToNext);
-
-      const nextNext = gpxPoints[currentSegmentIndex + 1];
-      const dx = nextNext.lon - target.lon;
-      const dy = nextNext.lat - target.lat;
-
-      const segmentDist = distanceMeters(target, nextNext);
+    if (distSq < (30 / 6371000) ** 2) { // distToNext < 30 meter
+      const distMeters = 6371000 * Math.sqrt(distSq); // naar meters
+      const lookAheadMeters = 30 - distToNext;
+      
+      const segmentDist = 6371000 * Math.sqrt(target.lenSq);
       const t = Math.min(1, lookAheadMeters / segmentDist);
 
-      target.lat += t * dy;
-      target.lon += t * dx;
+      target.lon += target.dx * t;
+      target.lat += target.dy * t / target.scale
     }
   }
 
@@ -258,18 +252,10 @@ function nextGPXPoint(pos, points) {
 }
 
 // AFSTAND TUSSEN TWEE PUNTEN
-function distanceMeters(loc1, loc2) {
-  const φ1 = degToRad(loc1.lat);
-  const φ2 = degToRad(loc2.lat);
-  const Δφ = degToRad(loc2.lat - loc1.lat);
-  const Δλ = degToRad(loc2.lon - loc1.lon);
-
-  const a = Math.sin(Δφ / 2) ** 2 +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return 6371000 * c; // straal aarde in meters
+function distanceMeters(a, b) {
+  const x = degToRad(b.lon - a.lon) * Math.cos(degToRad((a.lat + b.lat) / 2));
+  const y = degToRad(b.lat - a.lat);
+  return 6371000 * Math.sqrt(x*x + y*y);
 }
 
 // UPDATE ARROW
@@ -478,9 +464,11 @@ uploadButton.addEventListener("change", function(e) {
         lat: parseFloat(trkpts[i].getAttribute("lat")),
         lon: parseFloat(trkpts[i].getAttribute("lon")),
         ele: eleNode ? parseFloat(eleNode.textContent) : 0,
-        remainingAscent:  null, // vul later
-        remainingDescent: null, // vul later
-        remainingDistance: null // vul later
+        remainingAscent:  null,
+        remainingDescent: null,
+        remainingDistance: null,
+        dx: null, dy: null,
+        scale: null, lenSq: null
       });
     }
     
@@ -507,6 +495,17 @@ uploadButton.addEventListener("change", function(e) {
       if (i > 0) {
         distance += distanceMeters(gpxPoints[i], gpxPoints[i - 1]);
       }
+    }
+
+    // Bereken alvast dx, dy, scale en lenSq (voor nextGPXPoint)
+    for (let i = 0; i < gpxPoints.length - 1; i++) {
+      const A = gpxPoints[i];
+      const B = gpxPoints[i + 1];
+
+      A.scale = Math.cos(degToRad(A.lat + B.lat) / 2)
+      A.dx = (B.lon - A.lon) * A.scale;
+      A.dy = B.lat - A.lat;
+      A.lenSq = A.dx ** 2 + A.dy ** 2;
     }
 
     // Bereken alvast de bounds voor de kaart
@@ -586,7 +585,7 @@ toggleViewButton.onclick = () => {
     
     toggleViewButton.innerText = "Toon kaart";
     
-    await startTracking();
+    startTracking();
     updateArrow();
   }
 };
@@ -603,6 +602,7 @@ overlay.addEventListener("click", startTracking, { once: true });
 // * De overlay listener werkt op deze manier maar éénmalig, en dat is niet de bedoeling.
 // * Is het nog nodig om het GPS-pollen te stoppen als de kaart wordt getoond?
 // * Als de route alleen omhoog/omlaag gaat, ook hoogteprofiel en hoogte-informatie tonen.
+// * We kunnen een simpeler alternatief gebruiken voor de haversine-functie.
 
 // Verbeterpunten tijdens testen 1:
 // * We kunnen ook een knop toevoegen dat de gebruiker ergens al geweest is, die de currentSegmentIndex verhoogt, en/of een knop die aangeeft dat de kant die de pijl op wijst niet mogelijk is (geen pad), die het zoekbereik tijdelijk uitschakelt.
