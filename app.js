@@ -199,7 +199,7 @@ function nextGPXPoint(pos, points) {
   }
 
   // Fallback als we te ver weg zitten → globale search
-  if (minDist > (50 / 6371000) ** 2 { // minDist > 50 meter
+  if (minDist > (50 / 6371000) ** 2) { // minDist > 50 meter
     for (let i = 0; i < points.length - 1; i++) {
       if (i >= start && i < end) continue;
       
