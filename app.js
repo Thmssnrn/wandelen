@@ -16,9 +16,19 @@ let orientationActive = false;
 let inactivityTimeout = null;
 const INACTIVITY_LIMIT = 30000; // 30 sec
 
+let lastSegmentIndex = -1;
 let currentSegmentIndex = 0;
 let lastUpdate = 0;
 let currentView = "compassView";
+
+let mapCtx = null;
+let routePath = null;
+let traveledPath = null;
+let remainingPath = null;
+let canvasReady = false;
+let elevProfile = [];
+let elevMin = -430; // Oevers Dode Zee
+let elevMax = 8850; // Mount Everest
 
 // HTML elements
 const overlay = document.getElementById("userGestureOverlay");
@@ -28,7 +38,8 @@ const distanceText = document.getElementById("distance");
 const elevation = document.getElementById("elevation");
 const debugHTML = document.getElementById("debug");
 const mapCanvas = document.getElementById("mapCanvas");
-const elevCtx = document.getElementById("elevationCanvas").getContext("2d");
+const elevCanvas = document.getElementById("elevationCanvas");
+const elevCtx = elevCanvas.getContext("2d");
 const startButton = document.getElementById("startButton");
 const uploadButton = document.getElementById("gpxUpload");
 const toggleViewButton = document.getElementById("toggleViewButton");
@@ -40,6 +51,12 @@ function degToRad(φ) {
 
 function radToDeg(φ) {
   return (φ * 180 / Math.PI + 360) % 360;
+}
+
+function distanceMeters(a, b) {
+  const x = degToRad(b.lon - a.lon) * Math.cos(degToRad((a.lat + b.lat) / 2));
+  const y = degToRad(b.lat - a.lat);
+  return 6371000 * Math.sqrt(x*x + y*y);
 }
 
 // START
@@ -251,12 +268,6 @@ function nextGPXPoint(pos, points) {
   return target
 }
 
-// AFSTAND TUSSEN TWEE PUNTEN
-function distanceMeters(a, b) {
-  const x = degToRad(b.lon - a.lon) * Math.cos(degToRad((a.lat + b.lat) / 2));
-  const y = degToRad(b.lat - a.lat);
-  return 6371000 * Math.sqrt(x*x + y*y);
-}
 
 // UPDATE ARROW
 function updateArrow() {
@@ -295,10 +306,10 @@ function updateArrow() {
   if (gpsHeading !== null && Date.now() - gpsSince >= 3000) {
     let diff = Math.abs(currentBearing - gpsHeading) % 360;
     if (Math.min(diff, 360 - diff) > 45) { // graden
-      document.backgroundColor = "red";
+      document.body.style.backgroundColor = "red";
       navigator.vibrate?.(200);
     } else {
-      document.backgroundColor = "white";
+      document.body.style.backgroundColor = "white";
     }
   }
 
@@ -337,90 +348,123 @@ function updateArrow() {
   `;
 }
 
+// Route Path2D bouwen
+function buildPath(path, start, end, scaleX, scaleY, offsetX, offsetY) {
+  if (end - start < 2) return;
+
+  const p0x = offsetX + gpxPoints[start].lon * scaleX;
+  const p0y = offsetY - gpxPoints[start].lat * scaleY;
+  path.moveTo(p0x, p0y);
+
+  for (let i = start + 1; i < end - 1; i++) {
+    const currX = offsetX + gpxPoints[i].lon * scaleX;
+    const currY = offsetY - gpxPoints[i].lat * scaleY;
+    const nextX = offsetX + gpxPoints[i + 1].lon * scaleX;
+    const nextY = offsetY - gpxPoints[i + 1].lat * scaleY;
+
+    const midX = (currX + nextX) / 2;
+    const midY = (currY + nextY) / 2;
+
+    path.quadraticCurveTo(currX, currY, midX, midY);
+  }
+}
+
 // OVERZICHTSKAART
 function updateMap() {
-  if (currentView !== "mapView") return;
-  const UPDATE_INTERVAL = 30000;  // 30 sec
-  const now = Date.now();
-  if (now - lastUpdate < UPDATE_INTERVAL) return;
-  if (!currentPosition || gpxPoints.length === 0) return;
-  lastUpdate = now;
-    
-  const ctx = mapCanvas.getContext("2d");
-  ctx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+  // Maak canvas aan (eenmalig)
+  if (!canvasReady) {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = mapCanvas.getBoundingClientRect();
 
+    mapCanvas.width = rect.width * dpr;
+    mapCanvas.height = rect.height * dpr;
+
+    mapCtx = mapCanvas.getContext("2d");
+    mapCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    mapCtx.lineCap = "round";
+    mapCtx.lineJoin = "round";
+
+    canvasReady = true;
+  }
+
+  if (!currentPosition || !traveledPath || !remainingPath) return;
+
+  if (currentSegmentIndex !== lastSegmentIndex) {
+    const widthWorld  = (gpxBounds.maxLon - gpxBounds.minLon) * cosLat;
+    const heightWorld = (gpxBounds.maxLat - gpxBounds.minLat);
+
+    const scaleY = Math.min(
+      (mapCanvas.clientWidth - 20) / widthWorld,
+      (mapCanvas.clientHeight - 20) / heightWorld
+    );
+    const scaleX = scaleY * Math.cos(degToRad(gpxBounds.minLat + gpxBounds.maxLat) / 2);
+
+    const offsetX = (mapCanvas.clientWidth  - widthWorld  * scaleY) / 2 - gpxBounds.minLon * scaleX;
+    const offsetY = (mapCanvas.clientHeight + heightWorld * scaleY) / 2 + gpxBounds.minLat * scaleY;
+
+    traveledPath = new Path2D();
+    remainingPath = new Path2D();
+
+    buildPath(traveledPath, 0, currentSegmentIndex, scaleX, scaleY, offsetX, offsetY);
+    buildPath(remainingPath, currentSegmentIndex, gpxPoints.length, scaleX, scaleY, offsetX, offsetY);
+
+    lastSegmentIndex = currentSegmentIndex;
+  }
+
+  mapCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+  
+  // ===== REMAINING (grijs) =====
+  mapCtx.strokeStyle = "#D1D1D6";
+  mapCtx.lineWidth = 6;
+  mapCtx.stroke(remainingPath);
+  
+  // ===== HALO =====
+  mapCtx.strokeStyle = "white";
+  mapCtx.lineWidth = 10;
+  mapCtx.stroke(traveledPath);
+  
+  // ===== TRAVELED (blauw) =====
+  mapCtx.strokeStyle = "#0A84FF";
+  mapCtx.lineWidth = 6;
+  mapCtx.stroke(traveledPath);
+  
+  // ===== USER DOT =====
   const cosLat = Math.cos(degToRad(gpxBounds.minLat + gpxBounds.maxLat) / 2);
   const widthWorld  = (gpxBounds.maxLon - gpxBounds.minLon) * cosLat;
   const heightWorld = (gpxBounds.maxLat - gpxBounds.minLat);
+
   const scale = Math.min(
-    (mapCanvas.width - 20)  / widthWorld, // padding van 10px aan beide kanten
-    (mapCanvas.height - 20) / heightWorld
+    (mapCanvas.clientWidth - 20) / widthWorld,
+    (mapCanvas.clientHeight - 20) / heightWorld
   );
-  const offsetX = (mapCanvas.width  - widthWorld  * scale) / 2;
-  const offsetY = (mapCanvas.height + heightWorld * scale) / 2; // Dit is eigenlijk (mapCanvas.height - offsetY)
 
-  // ROUTE
-  ctx.lineWidth = 3;
+  const offsetX = (mapCanvas.clientWidth  - widthWorld  * scale) / 2;
+  const offsetY = (mapCanvas.clientHeight + heightWorld * scale) / 2;
 
-  // afgelegd
-  ctx.beginPath();
-  for (let i = 0; i <= currentSegmentIndex; i++) {
-    const x = offsetX + (gpxPoints[i].lon - gpxBounds.minLon) * scale * cosLat;
-    const y = offsetY - (gpxPoints[i].lat - gpxBounds.minLat) * scale;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.strokeStyle = "#007AFF";
-  ctx.stroke();
+  pX = offsetX + (currentPosition.lon - gpxBounds.minLon) * scale * cosLat;
+  pY = offsetY - (currentPosition.lat - gpxBounds.minLat) * scale;
 
-  // resterend
-  ctx.beginPath();
-  for (let i = currentSegmentIndex; i < gpxPoints.length; i++) {
-      const x = offsetX + (gpxPoints[i].lon - gpxBounds.minLon) * scale * cosLat;
-    const y = offsetY - (gpxPoints[i].lat - gpxBounds.minLat) * scale;
-    if (i === currentSegmentIndex) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.strokeStyle = "#ccc";
-  ctx.stroke();
+  mapCtx.beginPath();
+  mapCtx.arc(pX, pY, 6, 0, Math.PI * 2);
+  mapCtx.fillStyle = "#FF3B30";
+  mapCtx.fill();
 
-  // USER LOCATION
-  const x = offsetX + (currentPosition.lon - gpxBounds.minLon) * scale * cosLat;
-  const y = offsetY - (currentPosition.lat - gpxBounds.minLat) * scale;
-  
-  ctx.beginPath();
-  ctx.arc(x, y, 5, 0, Math.PI * 2);
-  ctx.fillStyle = "red";
-  ctx.fill();
+  mapCtx.beginPath();
+  mapCtx.arc(p.x, p.y, 10, 0, Math.PI * 2);
+  mapCtx.strokeStyle = "white";
+  mapCtx.lineWidth = 3;
+  mapCtx.stroke();
   
   // HOOGTEPRROFIEL  
-  if (gpxPoints[0].remainingAscent > 75 && gpxPoints[0].remainingDescent > 75) {
-    const maxElev = Math.max(...gpxPoints.map(p => p.ele));
-    const minElev = Math.min(...gpxPoints.map(p => p.ele));
-    
-    elevCtx.clearRect(0, 0, elevCtx.canvas.width, elevCtx.canvas.height);
-    elevCtx.beginPath();
-
-    xScale = elevCtx.canvas.width / gpxPoints.length;
-    yScale = elevCtx.canvas.height / (maxElev - minElev);
-    yOffset = elevCtx.canvas.height + minElev * yScale;
-
-    elevCtx.moveTo(0, yOffset - gpxPoints[0].ele * yScale)
-    for (let i = 1; i < gpxPoints.length; i++) {
-      const x = i * xScale;
-      const y = yOffset - gpxPoints[i].ele * yScale;
-      elevCtx.lineTo(x, y);
-    }
+  if (gpxPoints[0].remainingAscent > 75 && gpxPoints[0].remainingDescent > 75) {  
+    const x = (currentSegmentIndex / gpxPoints.length) * elevCtx.canvas.clientWidth;
   
-    elevCtx.strokeStyle = "#666";
-    elevCtx.stroke();
-    
-    // huidige positie
-    x = (currentSegmentIndex / gpxPoints.length) * elevCtx.canvas.width;
     elevCtx.beginPath();
     elevCtx.moveTo(x, 0);
-    elevCtx.lineTo(x, elevCtx.canvas.height);
-    elevCtx.strokeStyle = "red";
+    elevCtx.lineTo(x, elevCtx.canvas.clientHeight);
+    elevCtx.strokeStyle = "#FF3B30";
+    elevCtx.lineWidth = 2;
     elevCtx.stroke();
   }
   
@@ -486,6 +530,10 @@ uploadButton.addEventListener("change", function(e) {
       }
     }
 
+    elevProfile = gpxPoints.map(p => p.ele);
+    elevMin = Math.min(...elevProfile);
+    elevMax = Math.max(...elevProfile);
+
     // Bereken alvast de afstand
     let distance = 0
     for (let i = gpxPoints.length - 1; i >= 0; i--) {
@@ -528,8 +576,42 @@ uploadButton.addEventListener("change", function(e) {
     gpxBounds.minLon -= gpxPoints.length / 100000;
     gpxBounds.maxLon += gpxPoints.length / 100000;
     
-    // Voltooien    
+
+    // Teken hoogteprofiel
+    const ctx = elevCtx;
+    const w = elevCtx.canvas.clientWidth;
+    const h = elevCtx.canvas.clientHeight;
+
+    elevCtx.clearRect(0, 0, w, h);
+
+    const xScale = w / (elevProfile.length - 1);
+    const yScale = h / (elevMax - elevMin || 1);
+
+    elevCtx.beginPath();
+
+    for (let i = 0; i < elevProfile.length; i++) {
+      const x = i * xScale;
+      const y = h - (elevProfile[i] - elevMin) * yScale;
+
+      if (i === 0) elevCtx.moveTo(x, y);
+      else elevCtx.lineTo(x, y);
+    }
+
+    // fill (Apple-style)
+    elevCtx.lineTo(w, h);
+    elevCtx.lineTo(0, h);
+    elevCtx.closePath();
+
+    elevCtx.fillStyle = "#E5E5EA";
+    elevCtx.fill();
+
+    elevCtx.strokeStyle = "#8E8E93";
+    elevCtx.lineWidth = 2;
+    elevCtx.stroke();
+
+    // Voltooien
     currentSegmentIndex = 0;
+    lastSegmentIndex = -1;
     alert(`GPX geladen met ${gpxPoints.length} punten`);
   };
 
@@ -612,5 +694,3 @@ overlay.addEventListener("click", startTracking, { once: true });
 // Verbeterpunten tijdens testen 2:
 // * Beperkt aantal verhogingen segment-index per minuut?
 // * Iets doen bij aankomst: functioneel of voor het gevoel of een combinatie daarvan.
-
-
