@@ -185,8 +185,8 @@ function nextGPXPoint(pos, points) {
     const t = ((pos.lat - point.lat) * point.dy + (pos.lon - point.lon) * point.dx) / point.lenSq;
     const tClamped = Math.max(0, Math.min(1, t));
 
-    projLat = point.lat + tClamped * point.dy,
-    projLon = point.lon + tClamped * point.dx / point.scale
+    const projLat = point.lat + tClamped * point.dy,
+    const projLon = point.lon + tClamped * point.dx / point.scale
 
     const x = degToRad(projLon - pos.lon) * cosLat;
     const y = degToRad(projLat - pos.lat);
@@ -209,12 +209,12 @@ function nextGPXPoint(pos, points) {
       const t = ((pos.lat - point.lat) * point.dy + (pos.lon - point.lon) * point.dx) / point.lenSq;
       const tClamped = Math.max(0, Math.min(1, t));
 
-      projLat = point.lat + tClamped * point.dy,
-      projLon = point.lon + tClamped * point.dx / point.scale
+      const projLat = point.lat + tClamped * point.dy,
+      const projLon = point.lon + tClamped * point.dx / point.scale
 
       const x = degToRad(projLon - pos.lon) * cosLat;
       const y = degToRad(projLat - pos.lat);
-      d = x*x + y*y;
+      const d = x*x + y*y;
 
       if (d < minDist) {
         minDist = d;
@@ -238,7 +238,7 @@ function nextGPXPoint(pos, points) {
 
     if (distSq < (30 / 6371000) ** 2) { // distToNext < 30 meter
       const distMeters = 6371000 * Math.sqrt(distSq); // naar meters
-      const lookAheadMeters = 30 - distToNext;
+      const lookAheadMeters = 30 - distMeters;
       
       const segmentDist = 6371000 * Math.sqrt(target.lenSq);
       const t = Math.min(1, lookAheadMeters / segmentDist);
@@ -294,11 +294,11 @@ function updateArrow() {
   // GEKLEURDE ACHTERGROND
   if (gpsHeading !== null && Date.now() - gpsSince >= 3000) {
     let diff = Math.abs(currentBearing - gpsHeading) % 360;
-    if (diff > 45 || 360 - diff > 45) { // graden
-      arrow.style.backgroundColor = "red";
+    if (Math.min(diff, 360 - diff) > 45) { // graden
+      document.backgroundColor = "red";
       navigator.vibrate?.(200);
     } else {
-      arrow.style.backgroundColor = "white";
+      document.backgroundColor = "white";
     }
   }
 
