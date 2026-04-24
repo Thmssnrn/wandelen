@@ -389,8 +389,6 @@ function updateMap() {
     canvasReady = true;
   }
 
-  if (!currentPosition || !traveledPath || !remainingPath) return;
-
   if (currentSegmentIndex !== lastSegmentIndex) {
     const cosLat = Math.cos(degToRad(gpxBounds.minLat + gpxBounds.maxLat) / 2);
     const widthWorld  = (gpxBounds.maxLon - gpxBounds.minLon) * cosLat;
