@@ -8,7 +8,7 @@ let displayedRotation = 0;
 let currentPosition = null;
 let gpsHeading = null;
 let gpsSpeed = 0;
-let gpsSince = Infinity;
+let gpsSince = undefined;
 
 let watchId = null;
 let orientationActive = false;
@@ -93,10 +93,11 @@ async function startTracking() {
           gpsSpeed = pos.coords.speed * 3.6; // m/s -> km/h
 
           const now = Date.now();
-          if (gpsSpeed < 2) gpsSince = Infinity;
+          if (gpsSpeed < 2) gpsSince = undefinec;
           else {
             gpsSince = Math.min(gpsSince, now);
             if (previousPosition !== null && gpsHeading === null && now - gpsSince >= 3000) {
+              // Hier moeten we de afstand-bereken-functie voor gebruiken, Haversine is te ingewikkeld!
               const lat1 = degToRad(previousPosition.lat);
               const lat2 = degToRad(currentPosition.lat);
               const dLon = degToRad(currentPosition.lon - previousPosition.lon);
@@ -202,8 +203,8 @@ function nextGPXPoint(pos, points) {
     const t = ((pos.lat - point.lat) * point.dy + (pos.lon - point.lon) * point.dx) / point.lenSq;
     const tClamped = Math.max(0, Math.min(1, t));
 
-    const projLat = point.lat + tClamped * point.dy,
-    const projLon = point.lon + tClamped * point.dx / point.scale
+    const projLat = point.lat + tClamped * point.dy;
+    const projLon = point.lon + tClamped * point.dx / point.scale;
 
     const x = degToRad(projLon - pos.lon) * cosLat;
     const y = degToRad(projLat - pos.lat);
@@ -226,8 +227,8 @@ function nextGPXPoint(pos, points) {
       const t = ((pos.lat - point.lat) * point.dy + (pos.lon - point.lon) * point.dx) / point.lenSq;
       const tClamped = Math.max(0, Math.min(1, t));
 
-      const projLat = point.lat + tClamped * point.dy,
-      const projLon = point.lon + tClamped * point.dx / point.scale
+      const projLat = point.lat + tClamped * point.dy;
+      const projLon = point.lon + tClamped * point.dx / point.scale;
 
       const x = degToRad(projLon - pos.lon) * cosLat;
       const y = degToRad(projLat - pos.lat);
@@ -391,6 +392,7 @@ function updateMap() {
   if (!currentPosition || !traveledPath || !remainingPath) return;
 
   if (currentSegmentIndex !== lastSegmentIndex) {
+    const cosLat = Math.cos(degToRad(gpxBounds.minLat + gpxBounds.maxLat) / 2);
     const widthWorld  = (gpxBounds.maxLon - gpxBounds.minLon) * cosLat;
     const heightWorld = (gpxBounds.maxLat - gpxBounds.minLat);
 
@@ -398,7 +400,7 @@ function updateMap() {
       (mapCanvas.clientWidth - 20) / widthWorld,
       (mapCanvas.clientHeight - 20) / heightWorld
     );
-    const scaleX = scaleY * Math.cos(degToRad(gpxBounds.minLat + gpxBounds.maxLat) / 2);
+    const scaleX = scaleY * cosLat;
 
     const offsetX = (mapCanvas.clientWidth  - widthWorld  * scaleY) / 2 - gpxBounds.minLon * scaleX;
     const offsetY = (mapCanvas.clientHeight + heightWorld * scaleY) / 2 + gpxBounds.minLat * scaleY;
@@ -451,7 +453,7 @@ function updateMap() {
   mapCtx.fill();
 
   mapCtx.beginPath();
-  mapCtx.arc(p.x, p.y, 10, 0, Math.PI * 2);
+  mapCtx.arc(pX, pY, 10, 0, Math.PI * 2);
   mapCtx.strokeStyle = "white";
   mapCtx.lineWidth = 3;
   mapCtx.stroke();
@@ -672,7 +674,7 @@ toggleViewButton.onclick = () => {
 };
 
 // OVERLAY LISTENER
-overlay.addEventListener("click", startTracking, { once: true });
+overlay.addEventListener("click", startTracking);
 
 // Verbeterpunten tijdens ontwikkelen:
 // * Baterijoptimalisatie:
@@ -680,7 +682,7 @@ overlay.addEventListener("click", startTracking, { once: true });
 // - Je kunt ook stoppen met het updaten van de DOM, maar ik vraag me af of dat verschil maakt.
 // - Je kunt een energiebesparende modus toevoegen, die HighAccuracy op false zet en de huidige locatie vrijwel altijd projecteert op de route.
 // * Het label van de 'toon kaart'-knop moet bijgewerkt worden als de kaart al getoond wordt.
-// * De overlay listener werkt op deze manier maar éénmalig, en dat is niet de bedoeling.
+// * Veel listeners staan er dubbel in.
 // * Is het nog nodig om het GPS-pollen te stoppen als de kaart wordt getoond?
 // * Als de route alleen omhoog/omlaag gaat, ook hoogteprofiel en hoogte-informatie tonen.
 // * We kunnen een simpeler alternatief gebruiken voor de haversine-functie.
