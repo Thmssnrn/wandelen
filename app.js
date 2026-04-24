@@ -93,7 +93,7 @@ async function startTracking() {
           gpsSpeed = pos.coords.speed * 3.6; // m/s -> km/h
 
           const now = Date.now();
-          if (gpsSpeed < 2) gpsSince = undefinec;
+          if (gpsSpeed < 2) gpsSince = NaN;
           else {
             gpsSince = Math.min(gpsSince, now);
             if (previousPosition !== null && gpsHeading === null && now - gpsSince >= 3000) {
