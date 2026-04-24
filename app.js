@@ -337,17 +337,6 @@ function updateArrow() {
   `;
 }
 
-// PROJECTIE
-function project(lat, lon, bounds, width, height) {
-  const x = (lon - bounds.minLon) / (bounds.maxLon - bounds.minLon);
-  const y = (lat - bounds.minLat) / (bounds.maxLat - bounds.minLat);
-
-  return {
-    x: x * width,
-    y: height - (y * height)
-  };
-}
-
 // OVERZICHTSKAART
 function updateMap() {
   if (currentView !== "mapView") return;
@@ -359,14 +348,25 @@ function updateMap() {
     
   const ctx = mapCanvas.getContext("2d");
   ctx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
-  
+
+  const cosLat = Math.cos(degToRad(gpxBounds.minLat + gpxBounds.maxLat) / 2);
+  const widthWorld  = (gpxBounds.maxLon - gpxBounds.minLon) * cosLat;
+  const heightWorld = (gpxBounds.maxLat - gpxBounds.minLat);
+  const scale = Math.min(
+    (mapCanvas.width - 20)  / widthWorld, // padding van 10px aan beide kanten
+    (mapCanvas.height - 20) / heightWorld
+  );
+  const offsetX = (mapCanvas.width  - widthWorld  * scale) / 2;
+  const offsetY = (mapCanvas.height + heightWorld * scale) / 2; // Dit is eigenlijk (mapCanvas.height - offsetY)
+
   // ROUTE
   ctx.lineWidth = 3;
 
   // afgelegd
   ctx.beginPath();
   for (let i = 0; i <= currentSegmentIndex; i++) {
-    const { x, y } = project(gpxPoints[i].lat, gpxPoints[i].lon, gpxBounds, ctx.canvas.width, ctx.canvas.height);
+    const x = offsetX + (gpxPoints[i].lon - gpxBounds.minLon) * scale * cosLat;
+    const y = offsetY - (gpxPoints[i].lat - gpxBounds.minLat) * scale;
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   }
@@ -376,7 +376,8 @@ function updateMap() {
   // resterend
   ctx.beginPath();
   for (let i = currentSegmentIndex; i < gpxPoints.length; i++) {
-    const { x, y } = project(gpxPoints[i].lat, gpxPoints[i].lon, gpxBounds, ctx.canvas.width, ctx.canvas.height);
+      const x = offsetX + (gpxPoints[i].lon - gpxBounds.minLon) * scale * cosLat;
+    const y = offsetY - (gpxPoints[i].lat - gpxBounds.minLat) * scale;
     if (i === currentSegmentIndex) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   }
@@ -384,14 +385,9 @@ function updateMap() {
   ctx.stroke();
 
   // USER LOCATION
-  let { x, y } = project(
-    currentPosition.lat,
-    currentPosition.lon,
-    gpxBounds,
-    ctx.canvas.width,
-    ctx.canvas.height
-  );
-
+  const x = offsetX + (currentPosition.lon - gpxBounds.minLon) * scale * cosLat;
+  const y = offsetY - (currentPosition.lat - gpxBounds.minLat) * scale;
+  
   ctx.beginPath();
   ctx.arc(x, y, 5, 0, Math.PI * 2);
   ctx.fillStyle = "red";
@@ -404,14 +400,17 @@ function updateMap() {
     
     elevCtx.clearRect(0, 0, elevCtx.canvas.width, elevCtx.canvas.height);
     elevCtx.beginPath();
-    
-    gpxPoints.forEach((p, i) => {
-      x = (i / gpxPoints.length) * elevCtx.canvas.width;
-      y = (1 - (p.ele - minElev) / (maxElev - minElev)) * elevCtx.canvas.height;
-  
-      if (i === 0) elevCtx.moveTo(x, y);
-      else elevCtx.lineTo(x, y);
-    });
+
+    xScale = elevCtx.canvas.width / gpxPoints.length;
+    yScale = elevCtx.canvas.height / (maxElev - minElev);
+    yOffset = elevCtx.canvas.height + minElev * yScale;
+
+    elevCtx.moveTo(0, yOffset - gpxPoints[0].ele * yScale)
+    for (let i = 1; i < gpxPoints.length; i++) {
+      const x = i * xScale;
+      const y = yOffset - gpxPoints[i].ele * yScale;
+      elevCtx.lineTo(x, y);
+    }
   
     elevCtx.strokeStyle = "#666";
     elevCtx.stroke();
