@@ -83,6 +83,45 @@ body {
   display: block;
 }
 
+#mapContainer {
+  position: relative;
+}
+
+#userDot {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Witte ring */
+#userDot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 3px solid white;
+  border-radius: 50%;
+}
+
+/* Blauwe puls */
+#userDot::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  background: #0A84FF;
+  border-radius: 50%;
+  animation: pulse 2.5s ease-in-out infinite;
+  box-shadow: 0 0 6px rgba(10,132,255,0.5);
+}
+
+@keyframes pulse {
+  0%   { transform: scale(0.5); }
+  50%  { transform: scale(1); }
+  70%  { transform: scale(1); } /* korte “pauze” */
+  100% { transform: scale(0.5); }
+}
+
 #mapOverlay {
   top: 60px;
   left: 0;
