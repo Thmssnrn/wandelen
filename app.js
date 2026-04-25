@@ -407,9 +407,11 @@ function updateMap() {
     canvasHeight / (gpxBounds.maxLat - gpxBounds.minLat)
   ) * cosLat;
   const scaleY = scaleX / cosLat; // zodat verticale schaal klopt
+
+  // scaleY > scaleX
   
-  const offsetX = (canvasWidth - (gpxBounds.maxLon - gpxBounds.minLon) * scaleY * (cosLat + 1) / 2) / 2;
-  const offsetY = (canvasHeight - (gpxBounds.maxLat - gpxBounds.minLat) * scaleX) / 2;
+  const offsetX = (canvasWidth  - (gpxBounds.maxLon - gpxBounds.minLon) * scaleX) / 2;
+  const offsetY = (canvasHeight - (gpxBounds.maxLat - gpxBounds.minLat) * scaleY) / 2;
 
   // --- Paths bijwerken als segment verandert ---
   if (currentSegmentIndex !== lastSegmentIndex) {
