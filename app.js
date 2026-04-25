@@ -355,21 +355,32 @@ function updateArrow() {
 function buildPath(path, start, end, scaleX, scaleY, offsetX, offsetY) {
   if (end - start < 2) return;
 
-  const p0x = offsetX + gpxPoints[start].lon * scaleX;
-  const p0y = offsetY - gpxPoints[start].lat * scaleY;
+  const canvasWidth = mapCanvas.clientWidth;
+  const canvasHeight = mapCanvas.clientHeight;
+
+  function clampX(x) { return Math.max(0, Math.min(canvasWidth, x)); }
+  function clampY(y) { return Math.max(0, Math.min(canvasHeight, y)); }
+
+  let p0x = clampX(offsetX + gpxPoints[start].lon * scaleX);
+  let p0y = clampY(offsetY - gpxPoints[start].lat * scaleY);
   path.moveTo(p0x, p0y);
 
   for (let i = start + 1; i < end - 1; i++) {
-    const currX = offsetX + gpxPoints[i].lon * scaleX;
-    const currY = offsetY - gpxPoints[i].lat * scaleY;
-    const nextX = offsetX + gpxPoints[i + 1].lon * scaleX;
-    const nextY = offsetY - gpxPoints[i + 1].lat * scaleY;
+    let currX = clampX(offsetX + gpxPoints[i].lon * scaleX);
+    let currY = clampY(offsetY - gpxPoints[i].lat * scaleY);
+    let nextX = clampX(offsetX + gpxPoints[i + 1].lon * scaleX);
+    let nextY = clampY(offsetY - gpxPoints[i + 1].lat * scaleY);
 
     const midX = (currX + nextX) / 2;
     const midY = (currY + nextY) / 2;
 
     path.quadraticCurveTo(currX, currY, midX, midY);
   }
+
+  // Voeg het laatste punt toe, ook geclamped
+  let lastX = clampX(offsetX + gpxPoints[end - 1].lon * scaleX);
+  let lastY = clampY(offsetY - gpxPoints[end - 1].lat * scaleY);
+  path.lineTo(lastX, lastY);
 }
 
 // OVERZICHTSKAART
