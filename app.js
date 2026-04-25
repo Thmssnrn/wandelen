@@ -398,7 +398,13 @@ function updateMap() {
     (mapCanvas.clientWidth - 20) / widthWorld,
     (mapCanvas.clientHeight - 20) / heightWorld
   );
-  const scaleX = scaleY; // * cosLat;
+  const scaleX = scaleY * cosLat;
+
+  console.log({
+    widthWorld,
+    heightWorld,
+    chosen: scaleY
+  });
 
   const offsetX = (mapCanvas.clientWidth  - widthWorld  * scaleY) / 2 - gpxBounds.minLon * scaleX;
   const offsetY = (mapCanvas.clientHeight + heightWorld * scaleY) / 2 + gpxBounds.minLat * scaleY;
