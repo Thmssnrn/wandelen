@@ -352,7 +352,7 @@ function updateArrow() {
 }
 
 // Route Path2D bouwen
-function buildPath(path, start, end) {
+function buildPath(path, start, end, scaleX, scaleY, offsetX, offsetY) {
   if (end - start < 2) return;
 
   function getX(p) { return (p.lon - gpxBounds.minLon) * scaleX + offsetX; }
@@ -370,6 +370,7 @@ function buildPath(path, start, end) {
     const midY = (currY + nextY) / 2;
 
     path.quadraticCurveTo(currX, currY, midX, midY);
+    console.log({currX, currY, midX, midY, nextX, nextY});
   }
 
   // Laatste punt
