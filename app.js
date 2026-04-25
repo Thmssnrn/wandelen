@@ -376,9 +376,7 @@ function buildPath(path, start, end, scaleX, scaleY, offsetX, offsetY) {
 function updateMap() {
   if (!canvasReady) {
     const dpr = window.devicePixelRatio || 1;
-
-    // Map canvas
-    let rect = mapCanvas.getBoundingClientRect();
+    const rect = mapCanvas.getBoundingClientRect();
 
     mapCanvas.width = rect.width * dpr;
     mapCanvas.height = rect.height * dpr;
@@ -388,15 +386,6 @@ function updateMap() {
 
     mapCtx.lineCap = "round";
     mapCtx.lineJoin = "round";
-
-    // Elevation Canvas
-    rect = elevCanvas.getBoundingClientRect();
-  
-    elevCanvas.width = rect.width * dpr;
-    elevCanvas.height = rect.height * dpr;
-  
-    elevCtx = elevCanvas.getContext("2d");
-    elevCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     canvasReady = true;
   }
@@ -569,6 +558,15 @@ uploadButton.addEventListener("change", function(e) {
     
 
     // Teken hoogteprofiel
+    const dpr = window.devicePixelRatio || 1;
+    const rect = elevCanvas.getBoundingClientRect();
+  
+    elevCanvas.width = rect.width * dpr;
+    elevCanvas.height = rect.height * dpr;
+  
+    elevCtx = elevCanvas.getContext("2d");
+    elevCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    
     const w = elevCtx.canvas.clientWidth;
     const h = elevCtx.canvas.clientHeight;
 
