@@ -392,8 +392,8 @@ function updateMap() {
 
   const cosLat = Math.cos(degToRad((gpxBounds.minLat + gpxBounds.maxLat) / 2));
   const scale = Math.min(
-    (mapCanvas.clientWidth - 20) / ((gpxBounds.maxLon - gpxBounds.minLon) * cosLat),
-    (mapCanvas.clientHeight - 20) / (gpxBounds.maxLat - gpxBounds.minLat)
+    mapCanvas.clientWidth / ((gpxBounds.maxLon - gpxBounds.minLon) * cosLat),
+    mapCanvas.clientHeight / (gpxBounds.maxLat - gpxBounds.minLat)
   );
   
   const scaleX = scale * cosLat;
@@ -430,7 +430,7 @@ function updateMap() {
   mapCtx.stroke(traveledPath);
   
   // ===== USER DOT =====
-  pX = offsetX + currentPosition.lon * scaleX
+  pX = offsetX + currentPosition.lon * scaleX;
   pY = offsetY - currentPosition.lat * scaleY;
   userDot.style.left = `${pX}px`;
   userDot.style.top = `${pY}px`;
