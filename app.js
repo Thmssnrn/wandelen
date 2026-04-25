@@ -9,6 +9,7 @@ let currentPosition = null;
 let gpsHeading = null;
 let gpsSpeed = 0;
 let gpsSince = NaN;
+let gpsAccuracy = Infinity;
 
 let watchId = null;
 let orientationActive = false;
@@ -84,39 +85,40 @@ async function startTracking() {
   if (watchId === null) {
     watchId = navigator.geolocation.watchPosition(
       (pos) => { // on update:
-          const previousPosition = currentPosition;
-          currentPosition = {
-            lat: pos.coords.latitude,
-            lon: pos.coords.longitude
-          };
+        const previousPosition = currentPosition;
+        currentPosition = {
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude
+        };
 
-          gpsHeading = pos.coords.heading;
-          gpsSpeed = pos.coords.speed * 3.6; // m/s -> km/h
+        gpsHeading = pos.coords.heading;
+        gpsSpeed = pos.coords.speed * 3.6; // m/s -> km/h
+        gpsAccuracy = pos.coords.accuracy;
 
+        if (gpsSpeed < 2) {
+          gpsSince = NaN;
+        } else {
           const now = Date.now();
-          if (gpsSpeed < 2) {
-            gpsSince = NaN;
-          } else {
-            gpsSince ??= now;
-            if (previousPosition !== null && gpsHeading === null && now - gpsSince >= 3000) {
-              // Hier moeten we de afstand-bereken-functie voor gebruiken, Haversine is te ingewikkeld!
-              const lat1 = degToRad(previousPosition.lat);
-              const lat2 = degToRad(currentPosition.lat);
-              const dLon = degToRad(currentPosition.lon - previousPosition.lon);
-              const y = Math.sin(dLon) * Math.cos(lat2);
-              const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-              gpsHeading = radToDeg(Math.atan2(y, x));
-            }
+          gpsSince ??= now;
+          if (previousPosition !== null && gpsHeading === null && now - gpsSince >= 3000) {
+            // Hier moeten we de afstand-bereken-functie voor gebruiken, Haversine is te ingewikkeld!
+            const lat1 = degToRad(previousPosition.lat);
+            const lat2 = degToRad(currentPosition.lat);
+            const dLon = degToRad(currentPosition.lon - previousPosition.lon);
+            const y = Math.sin(dLon) * Math.cos(lat2);
+            const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+            gpsHeading = radToDeg(Math.atan2(y, x));
           }
-        
-          if (currentView === "compassView") updateArrow();
-          else updateMap();
+        }
+      
+        if (currentView === "compassView") updateArrow();
+        else updateMap();
       },
       (err) => console.error(err),
       { // Configureer GPS:
         enableHighAccuracy: true,
         maximumAge: 5000,
-        timeout: 8000
+        timeout: 30000
       }
     );
   }
