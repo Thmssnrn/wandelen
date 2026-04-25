@@ -406,7 +406,7 @@ function updateMap() {
     chosen: scaleY
   });
 
-  const offsetX = (mapCanvas.clientWidth  - widthWorld  * scaleY) / 2 - gpxBounds.minLon * scaleX;
+  const offsetX = (mapCanvas.clientWidth  - widthWorld  * scaleX) / 2 - gpxBounds.minLon * scaleX;
   const offsetY = (mapCanvas.clientHeight + heightWorld * scaleY) / 2 + gpxBounds.minLat * scaleY;
 
   if (currentSegmentIndex !== lastSegmentIndex) {
