@@ -431,8 +431,8 @@ function updateMap() {
   mapCtx.stroke(traveledPath);
   
   // ===== USER DOT =====
-  pX = offsetX + (currentPosition.lon - gpxBounds.minLon) * scale * cosLat;
-  pY = offsetY - (currentPosition.lat - gpxBounds.minLat) * scale;
+  pX = offsetX + currentPosition.lon * scaleX
+  pY = offsetY - currentPosition.lat * scaleY;
   userDot.style.left = `${pX}px`;
   userDot.style.top = `${pY}px`;
   
