@@ -84,8 +84,8 @@ body {
 
 #mapContainer {
   position: relative;
-  justify-content: center; /* horizontaal */
-  align-items: center;  /* verticaal */
+  /*justify-content: center; /* horizontaal */
+  /*align-items: center;  /* verticaal */
 }
 
 #userDot {
