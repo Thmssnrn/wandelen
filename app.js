@@ -8,7 +8,7 @@ let displayedRotation = 0;
 let currentPosition = null;
 let gpsHeading = null;
 let gpsSpeed = 0;
-let gpsSince = undefined;
+let gpsSince = NaN;
 
 let watchId = null;
 let orientationActive = false;
@@ -22,6 +22,7 @@ let lastUpdate = 0;
 let currentView = "compassView";
 
 let mapCtx = null;
+let elevCtx = null;
 let routePath = null;
 let traveledPath = null;
 let remainingPath = null;
@@ -39,7 +40,6 @@ const elevation = document.getElementById("elevation");
 const debugHTML = document.getElementById("debug");
 const mapCanvas = document.getElementById("mapCanvas");
 const elevCanvas = document.getElementById("elevationCanvas");
-const elevCtx = elevCanvas.getContext("2d"); // Dit moet niet hier staan.
 const startButton = document.getElementById("startButton");
 const uploadButton = document.getElementById("gpxUpload");
 const toggleViewButton = document.getElementById("toggleViewButton");
@@ -94,9 +94,10 @@ async function startTracking() {
           gpsSpeed = pos.coords.speed * 3.6; // m/s -> km/h
 
           const now = Date.now();
-          if (gpsSpeed < 2) gpsSince = NaN;
-          else {
-            gpsSince = Math.min(gpsSince, now);
+          if (gpsSpeed < 2) {
+            gpsSince = NaN;
+          } else {
+            gpsSince ??= now;
             if (previousPosition !== null && gpsHeading === null && now - gpsSince >= 3000) {
               // Hier moeten we de afstand-bereken-functie voor gebruiken, Haversine is te ingewikkeld!
               const lat1 = degToRad(previousPosition.lat);
@@ -373,7 +374,6 @@ function buildPath(path, start, end, scaleX, scaleY, offsetX, offsetY) {
 
 // OVERZICHTSKAART
 function updateMap() {
-  // Maak canvas aan (eenmalig)
   if (!canvasReady) {
     const dpr = window.devicePixelRatio || 1;
     const rect = mapCanvas.getBoundingClientRect();
@@ -390,18 +390,22 @@ function updateMap() {
     canvasReady = true;
   }
 
+  if (!gpxBounds || !currentPosition) return;
+
+  // --- Correcte schaal en offset ---
   const cosLat = Math.cos(degToRad((gpxBounds.minLat + gpxBounds.maxLat) / 2));
-  const scale = Math.min(
-    mapCanvas.clientWidth / ((gpxBounds.maxLon - gpxBounds.minLon) * cosLat),
-    mapCanvas.clientHeight / (gpxBounds.maxLat - gpxBounds.minLat)
-  );
-  
+  const width = (gpxBounds.maxLon - gpxBounds.minLon) * cosLat;
+  const height = gpxBounds.maxLat - gpxBounds.minLat;
+
+  const scale = Math.min(mapCanvas.clientWidth / width, mapCanvas.clientHeight / height);
+
+  const offsetX = (mapCanvas.clientWidth - width * scale) / 2 - gpxBounds.minLon * cosLat * scale;
+  const offsetY = (mapCanvas.clientHeight - height * scale) / 2 + gpxBounds.minLat * scale;
+
   const scaleX = scale * cosLat;
   const scaleY = scale;
-  
-  const offsetX = (mapCanvas.clientWidth  - (gpxBounds.maxLon - gpxBounds.minLon) * scaleX) / 2 - gpxBounds.minLon * scaleX;
-  const offsetY = (mapCanvas.clientHeight + (gpxBounds.maxLat - gpxBounds.minLat) * scaleY) / 2 + gpxBounds.minLat * scaleY;
 
+  // --- Paths bijwerken als segment verandert ---
   if (currentSegmentIndex !== lastSegmentIndex) {
     traveledPath = new Path2D();
     remainingPath = new Path2D();
@@ -413,32 +417,32 @@ function updateMap() {
   }
 
   mapCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
-  
-  // ===== REMAINING (grijs) =====
+
+  // ===== Resterende route =====
   mapCtx.strokeStyle = "#D1D1D6";
   mapCtx.lineWidth = 6;
   mapCtx.stroke(remainingPath);
-  
-  // ===== HALO =====
+
+  // ===== Traveled route halo =====
   mapCtx.strokeStyle = "white";
   mapCtx.lineWidth = 10;
   mapCtx.stroke(traveledPath);
-  
-  // ===== TRAVELED (blauw) =====
+
+  // ===== Traveled route =====
   mapCtx.strokeStyle = "#0A84FF";
   mapCtx.lineWidth = 6;
   mapCtx.stroke(traveledPath);
-  
-  // ===== USER DOT =====
-  pX = offsetX + currentPosition.lon * scaleX;
-  pY = offsetY - currentPosition.lat * scaleY;
+
+  // ===== User Dot =====
+  const pX = (currentPosition.lon - gpxBounds.minLon) * cosLat * scale + offsetX;
+  const pY = (gpxBounds.maxLat - currentPosition.lat) * scale + offsetY; // Noord bovenaan
   userDot.style.left = `${pX}px`;
   userDot.style.top = `${pY}px`;
-  
-  // HOOGTEPRROFIEL  
-  if (gpxPoints[0].remainingAscent > 75 && gpxPoints[0].remainingDescent > 75) {  
+
+  // ===== Hoogteprofiel indicator =====
+  if (gpxPoints[0].remainingAscent > 75 && gpxPoints[0].remainingDescent > 75) {
     const x = (currentSegmentIndex / gpxPoints.length) * elevCtx.canvas.clientWidth;
-  
+
     elevCtx.beginPath();
     elevCtx.moveTo(x, 0);
     elevCtx.lineTo(x, elevCtx.canvas.clientHeight);
@@ -446,9 +450,6 @@ function updateMap() {
     elevCtx.lineWidth = 2;
     elevCtx.stroke();
   }
-  
-  document.getElementById("progressText").innerText = `${Math.round((currentSegmentIndex - 1) / gpxPoints.length * 100)}% voltooid`;
-  document.getElementById("remainingText").innerText = `Nog ${(gpxPoints[currentSegmentIndex].remainingDistance/1000).toFixed(1)} km`;
 }
 
 
