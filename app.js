@@ -390,24 +390,17 @@ function updateMap() {
     canvasReady = true;
   }
 
-  const cosLat = Math.cos(degToRad(gpxBounds.minLat + gpxBounds.maxLat) / 2);
-  const widthWorld  = (gpxBounds.maxLon - gpxBounds.minLon) * cosLat;
-  const heightWorld = (gpxBounds.maxLat - gpxBounds.minLat);
-
-  const scaleY = Math.min(
-    (mapCanvas.clientWidth - 20) / widthWorld,
-    (mapCanvas.clientHeight - 20) / heightWorld
+  const cosLat = Math.cos(degToRad((gpxBounds.minLat + gpxBounds.maxLat) / 2));
+  const scale = Math.min(
+    (mapCanvas.clientWidth - 20) / ((gpxBounds.maxLon - gpxBounds.minLon) * cosLat),
+    (mapCanvas.clientHeight - 20) / (gpxBounds.maxLat - gpxBounds.minLat)
   );
-  const scaleX = scaleY * cosLat;
-
-  console.log({
-    scaleX_raw: (mapCanvas.clientWidth - 20) / widthWorld,
-    scaleY_raw: (mapCanvas.clientHeight - 20) / heightWorld,
-    chosen: scaleY
-  });
-
-  const offsetX = (mapCanvas.clientWidth  - widthWorld  * scaleX) / 2 - gpxBounds.minLon * scaleX;
-  const offsetY = (mapCanvas.clientHeight + heightWorld * scaleY) / 2 + gpxBounds.minLat * scaleY;
+  
+  const scaleX = scale * cosLat;
+  const scaleY = scale;
+  
+  const offsetX = (mapCanvas.clientWidth  - (gpxBounds.maxLon - gpxBounds.minLon) * scaleX) / 2 - gpxBounds.minLon * scaleX;
+  const offsetY = (mapCanvas.clientHeight + (gpxBounds.maxLat - gpxBounds.minLat) * scaleY) / 2 + gpxBounds.minLat * scaleY;
 
   if (currentSegmentIndex !== lastSegmentIndex) {
     traveledPath = new Path2D();
