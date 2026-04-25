@@ -107,11 +107,10 @@ body {
 #userDot::after {
   content: "";
   position: absolute;
-  inset: 2.5px; /* Hoeveelheid krimp */
+  inset: 2px; /* Hoeveelheid krimp */
   background: #0A84FF;
   border-radius: 50%;
   animation: pulse 2.5s ease-in-out infinite;
-  box-shadow: 0 0 6px rgba(10,132,255,0.5);
 }
 
 @keyframes pulse {
