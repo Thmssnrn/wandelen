@@ -401,8 +401,8 @@ function updateMap() {
   const scaleX = scaleY * cosLat;
 
   console.log({
-    (mapCanvas.clientWidth - 20) / widthWorld,
-    (mapCanvas.clientHeight - 20) / heightWorld,
+    scaleX_raw: (mapCanvas.clientWidth - 20) / widthWorld,
+    scaleY_raw: (mapCanvas.clientHeight - 20) / heightWorld,
     chosen: scaleY
   });
 
