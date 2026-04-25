@@ -39,10 +39,11 @@ const elevation = document.getElementById("elevation");
 const debugHTML = document.getElementById("debug");
 const mapCanvas = document.getElementById("mapCanvas");
 const elevCanvas = document.getElementById("elevationCanvas");
-const elevCtx = elevCanvas.getContext("2d");
+const elevCtx = elevCanvas.getContext("2d"); // Dit moet niet hier staan.
 const startButton = document.getElementById("startButton");
 const uploadButton = document.getElementById("gpxUpload");
 const toggleViewButton = document.getElementById("toggleViewButton");
+const userDot = document.getElementById("userDot");
 
 // HELPERS
 function degToRad(φ) {
@@ -389,20 +390,20 @@ function updateMap() {
     canvasReady = true;
   }
 
+  const cosLat = Math.cos(degToRad(gpxBounds.minLat + gpxBounds.maxLat) / 2);
+  const widthWorld  = (gpxBounds.maxLon - gpxBounds.minLon) * cosLat;
+  const heightWorld = (gpxBounds.maxLat - gpxBounds.minLat);
+
+  const scaleY = Math.min(
+    (mapCanvas.clientWidth - 20) / widthWorld,
+    (mapCanvas.clientHeight - 20) / heightWorld
+  );
+  const scaleX = scaleY * cosLat;
+
+  const offsetX = (mapCanvas.clientWidth  - widthWorld  * scaleY) / 2 - gpxBounds.minLon * scaleX;
+  const offsetY = (mapCanvas.clientHeight + heightWorld * scaleY) / 2 + gpxBounds.minLat * scaleY;
+
   if (currentSegmentIndex !== lastSegmentIndex) {
-    const cosLat = Math.cos(degToRad(gpxBounds.minLat + gpxBounds.maxLat) / 2);
-    const widthWorld  = (gpxBounds.maxLon - gpxBounds.minLon) * cosLat;
-    const heightWorld = (gpxBounds.maxLat - gpxBounds.minLat);
-
-    const scaleY = Math.min(
-      (mapCanvas.clientWidth - 20) / widthWorld,
-      (mapCanvas.clientHeight - 20) / heightWorld
-    );
-    const scaleX = scaleY * cosLat;
-
-    const offsetX = (mapCanvas.clientWidth  - widthWorld  * scaleY) / 2 - gpxBounds.minLon * scaleX;
-    const offsetY = (mapCanvas.clientHeight + heightWorld * scaleY) / 2 + gpxBounds.minLat * scaleY;
-
     traveledPath = new Path2D();
     remainingPath = new Path2D();
 
@@ -430,31 +431,10 @@ function updateMap() {
   mapCtx.stroke(traveledPath);
   
   // ===== USER DOT =====
-  const cosLat = Math.cos(degToRad(gpxBounds.minLat + gpxBounds.maxLat) / 2);
-  const widthWorld  = (gpxBounds.maxLon - gpxBounds.minLon) * cosLat;
-  const heightWorld = (gpxBounds.maxLat - gpxBounds.minLat);
-
-  const scale = Math.min(
-    (mapCanvas.clientWidth - 20) / widthWorld,
-    (mapCanvas.clientHeight - 20) / heightWorld
-  );
-
-  const offsetX = (mapCanvas.clientWidth  - widthWorld  * scale) / 2;
-  const offsetY = (mapCanvas.clientHeight + heightWorld * scale) / 2;
-
   pX = offsetX + (currentPosition.lon - gpxBounds.minLon) * scale * cosLat;
   pY = offsetY - (currentPosition.lat - gpxBounds.minLat) * scale;
-
-  mapCtx.beginPath();
-  mapCtx.arc(pX, pY, 6, 0, Math.PI * 2);
-  mapCtx.fillStyle = "#FF3B30";
-  mapCtx.fill();
-
-  mapCtx.beginPath();
-  mapCtx.arc(pX, pY, 10, 0, Math.PI * 2);
-  mapCtx.strokeStyle = "white";
-  mapCtx.lineWidth = 3;
-  mapCtx.stroke();
+  userDot.style.left = `${pX}px`;
+  userDot.style.top = `${pY}px`;
   
   // HOOGTEPRROFIEL  
   if (gpxPoints[0].remainingAscent > 75 && gpxPoints[0].remainingDescent > 75) {  
@@ -578,7 +558,6 @@ uploadButton.addEventListener("change", function(e) {
     
 
     // Teken hoogteprofiel
-    const ctx = elevCtx;
     const w = elevCtx.canvas.clientWidth;
     const h = elevCtx.canvas.clientHeight;
 
