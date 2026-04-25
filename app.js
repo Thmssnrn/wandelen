@@ -352,24 +352,19 @@ function updateArrow() {
 }
 
 // Route Path2D bouwen
-function buildPath(path, start, end, scaleX, scaleY, offsetX, offsetY) {
+function buildPath(path, start, end) {
   if (end - start < 2) return;
 
-  const canvasWidth = mapCanvas.clientWidth;
-  const canvasHeight = mapCanvas.clientHeight;
+  function getX(p) { return (p.lon - gpxBounds.minLon) * scaleX + offsetX; }
+  function getY(p) { return (gpxBounds.maxLat - p.lat) * scaleY + offsetY; }
 
-  function clampX(x) { return Math.max(0, Math.min(canvasWidth, x)); }
-  function clampY(y) { return Math.max(0, Math.min(canvasHeight, y)); }
-
-  let p0x = clampX(offsetX + gpxPoints[start].lon * scaleX);
-  let p0y = clampY(offsetY - gpxPoints[start].lat * scaleY);
-  path.moveTo(p0x, p0y);
+  path.moveTo(getX(gpxPoints[start]), getY(gpxPoints[start]));
 
   for (let i = start + 1; i < end - 1; i++) {
-    let currX = clampX(offsetX + gpxPoints[i].lon * scaleX);
-    let currY = clampY(offsetY - gpxPoints[i].lat * scaleY);
-    let nextX = clampX(offsetX + gpxPoints[i + 1].lon * scaleX);
-    let nextY = clampY(offsetY - gpxPoints[i + 1].lat * scaleY);
+    const currX = getX(gpxPoints[i]);
+    const currY = getY(gpxPoints[i]);
+    const nextX = getX(gpxPoints[i + 1]);
+    const nextY = getY(gpxPoints[i + 1]);
 
     const midX = (currX + nextX) / 2;
     const midY = (currY + nextY) / 2;
@@ -377,10 +372,8 @@ function buildPath(path, start, end, scaleX, scaleY, offsetX, offsetY) {
     path.quadraticCurveTo(currX, currY, midX, midY);
   }
 
-  // Voeg het laatste punt toe, ook geclamped
-  let lastX = clampX(offsetX + gpxPoints[end - 1].lon * scaleX);
-  let lastY = clampY(offsetY - gpxPoints[end - 1].lat * scaleY);
-  path.lineTo(lastX, lastY);
+  // Laatste punt
+  path.lineTo(getX(gpxPoints[end - 1]), getY(gpxPoints[end - 1]));
 }
 
 // OVERZICHTSKAART
@@ -404,17 +397,18 @@ function updateMap() {
   if (!gpxBounds || !currentPosition) return;
 
   // --- Correcte schaal en offset ---
+  const canvasWidth = mapCanvas.clientWidth;
+  const canvasHeight = mapCanvas.clientHeight;
+  
   const cosLat = Math.cos(degToRad((gpxBounds.minLat + gpxBounds.maxLat) / 2));
-  const width = (gpxBounds.maxLon - gpxBounds.minLon) * cosLat;
-  const height = gpxBounds.maxLat - gpxBounds.minLat;
-
-  const scale = Math.min(mapCanvas.clientWidth / width, mapCanvas.clientHeight / height);
-
-  const offsetX = (mapCanvas.clientWidth - width * scale) / 2 - gpxBounds.minLon * cosLat * scale;
-  const offsetY = (mapCanvas.clientHeight - height * scale) / 2 + gpxBounds.minLat * scale;
-
-  const scaleX = scale * cosLat;
-  const scaleY = scale;
+  const scaleX = Math.min(
+    canvasWidth / ((gpxBounds.maxLon - gpxBounds.minLon) * cosLat),
+    canvasHeight / (gpxBounds.maxLat - gpxBounds.minLat)
+  ) * cosLat;
+  const scaleY = scaleX / cosLat; // zodat verticale schaal klopt
+  
+  const offsetX = (canvasWidth - (gpxBounds.maxLon - gpxBounds.minLon) * scaleX) / 2;
+  const offsetY = (canvasHeight - (gpxBounds.maxLat - gpxBounds.minLat) * scaleY) / 2;
 
   // --- Paths bijwerken als segment verandert ---
   if (currentSegmentIndex !== lastSegmentIndex) {
@@ -445,8 +439,8 @@ function updateMap() {
   mapCtx.stroke(traveledPath);
 
   // ===== User Dot =====
-  const pX = (currentPosition.lon - gpxBounds.minLon) * cosLat * scale + offsetX;
-  const pY = (gpxBounds.maxLat - currentPosition.lat) * scale + offsetY; // Noord bovenaan
+  const pX = (currentPosition.lon - gpxBounds.minLon) * scaleX + offsetX;
+  const pY = (gpxBounds.maxLat - currentPosition.lat) * scaleY + offsetY;
   userDot.style.left = `${pX}px`;
   userDot.style.top = `${pY}px`;
 
