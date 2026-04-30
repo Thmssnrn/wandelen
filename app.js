@@ -7,19 +7,22 @@ let displayedRotation = 0;
 
 let currentPosition = null;
 let gpsHeading = null;
-let gpsSpeed = 0;
+let gpsSpeed = null;
 let gpsSince = NaN;
-let gpsAccuracy = Infinity;
+let gpsAccuracy = null;
+let gpsUpdate = null;
 
 let watchId = null;
 let orientationActive = false;
 
 let inactivityTimeout = null;
 const INACTIVITY_LIMIT = 30000; // 30 sec
+let inactivityHandler = null;
+let resume = true;
 
 let lastSegmentIndex = -1;
 let currentSegmentIndex = 0;
-let lastUpdate = 0;
+let lastUpdate = null;
 let currentView = "compassView";
 
 let mapCtx = null;
@@ -55,10 +58,19 @@ function radToDeg(φ) {
   return (φ * 180 / Math.PI + 360) % 360;
 }
 
+function radSqToMeters(φ) {
+  return Math.sqrt(φ) * 6371000;
+}
+
 function distanceMeters(a, b) {
   const x = degToRad(b.lon - a.lon) * Math.cos(degToRad((a.lat + b.lat) / 2));
   const y = degToRad(b.lat - a.lat);
   return 6371000 * Math.sqrt(x*x + y*y);
+}
+
+function angleDiff(a, b) {
+  let d = Math.abs(a - b + 360) % 360;
+  return Math.min(d, 360 - d);
 }
 
 // START
@@ -94,14 +106,16 @@ async function startTracking() {
         gpsHeading = pos.coords.heading;
         gpsSpeed = pos.coords.speed * 3.6; // m/s -> km/h
         gpsAccuracy = pos.coords.accuracy;
+        gpsUpdate = Date.now();
 
         if (gpsSpeed < 2) {
           gpsSince = NaN;
         } else {
-          const now = Date.now();
-          gpsSince ??= now;
-          if (previousPosition !== null && gpsHeading === null && now - gpsSince >= 3000) {
-            // Hier moeten we de afstand-bereken-functie voor gebruiken, Haversine is te ingewikkeld!
+          if (isNaN(gpsSince)) {
+            gpsSince = Date.now();
+          }
+          else if (previousPosition !== null && gpsHeading === null && Date.now() - gpsSince >= 3000) {
+            // Hier moeten we een aparte functie voor maken.
             const lat1 = degToRad(previousPosition.lat);
             const lat2 = degToRad(currentPosition.lat);
             const dLon = degToRad(currentPosition.lon - previousPosition.lon);
@@ -122,16 +136,17 @@ async function startTracking() {
       }
     );
   }
-
+  
   // Start User Inactivity Listeners
-  const events = ["mousedown", "touchstart"];
-  events.forEach(event => {
-    document.addEventListener(event, () => {
-      if (inactivityTimeout) clearTimeout(inactivityTimeout);
-      inactivityTimeout = setTimeout(stopTracking, INACTIVITY_LIMIT);
-    }, { passive: true });
-  });
-
+  if (!inactivityHandler) {
+    ["mousedown", "touchstart"].forEach(event => {
+      document.addEventListener(event, () => {
+        if (inactivityTimeout) clearTimeout(inactivityTimeout);
+        inactivityTimeout = setTimeout(stopTracking, INACTIVITY_LIMIT);
+      }, { passive: true });
+    });
+  }
+  
   // Start User Inactivity Timer
   if (inactivityTimeout) clearTimeout(inactivityTimeout);
   inactivityTimeout = setTimeout(stopTracking, INACTIVITY_LIMIT);
@@ -164,6 +179,9 @@ function stopTracking() {
   // fullscreen "overlay button" listener
   overlay.style.display = "block";
   overlay.style.pointerEvents = "auto";
+
+  // Eerstvolgende meting negeren
+  resume = false;
 }
 
 // COMPASS
@@ -172,7 +190,6 @@ function handleOrientation(event) {
   const UPDATE_INTERVAL = gpsSpeed > 2 ? 1000 : 250;  // m/s en ms
   const now = Date.now();
   if (now - lastUpdate < UPDATE_INTERVAL) return;
-  if (currentView !== "compassView") return;
   lastUpdate = now;
   
   if (!isNaN(event.webkitCompassHeading)) {
@@ -190,6 +207,7 @@ function nextGPXPoint(pos, points) {
 
   let minDist = Infinity;
   let bestIndex = currentSegmentIndex;
+  let bestProj = pos;
 
   const BACKWARD_WINDOW = 3;
   const FORWARD_WINDOW = 10;
@@ -217,17 +235,22 @@ function nextGPXPoint(pos, points) {
     if (d < minDist) {
       minDist = d;
       bestIndex = i + 1;
+      bestProj = {
+        lat: projLat,
+        lon: projLon,
+        t: tClamped
+      }
     }
   }
 
-  // Fallback als we te ver weg zitten → globale search
-  if (minDist > (50 / 6371000) ** 2) { // minDist > 50 meter
+  // Fallback als we te ver weg zitten → global search
+  if (radSqToMeters(minDist) > 50) {
     for (let i = 0; i < points.length - 1; i++) {
       if (i >= start && i < end) continue;
       
       // Projectie -> afstand tot het segment ipv het punt
       const point = points[i];
-
+  
       const t = ((pos.lat - point.lat) * point.dy + (pos.lon - point.lon) * point.dx) / point.lenSq;
       const tClamped = Math.max(0, Math.min(1, t));
 
@@ -241,36 +264,56 @@ function nextGPXPoint(pos, points) {
       if (d < minDist) {
         minDist = d;
         bestIndex = i + 1;
+        bestProj = {
+          lat: projLat,
+          lon: projLon,
+          t: tClamped
+        }
       }
     }
   }
-
+ 
   // Update progress (maar voorkom onrealistische sprongen naar achteren)
   if (bestIndex > currentSegmentIndex - 5) {
     currentSegmentIndex = Math.min(bestIndex, points.length - 1);
   }
 
   let target = { ...gpxPoints[currentSegmentIndex] }; // Maak een kopie
+  const distanceToRoute = radSqToMeters(minDist)
+  
+
+  if (distanceToRoute > Math.max(gpsAccuracy, 15)) {
+    bestProj.lat = pos.lat
+    bestProj.lon = pos.lon
+  } else if (distanceToRoute > 1000) {
+    stopTracking();
+    alert("**Let op!**\nKlik pas op *start* als je echt gaat starten!")
+    return null;
+  }
+
+  const distanceToTarget = distanceMeters(target, bestProj)
 
   // LOOK-AHEAD LOGICA bij bochten
-  if (currentSegmentIndex < gpxPoints.length - 1) {
-    const x = degToRad(target.lon - pos.lon) * cosLat;
-    const y = degToRad(target.lat - pos.lat);    
-    const distSq = x*x + y*y;
-
-    if (distSq < (30 / 6371000) ** 2) { // distToNext < 30 meter
-      const distMeters = 6371000 * Math.sqrt(distSq); // naar meters
-      const lookAheadMeters = 30 - distMeters;
-      
-      const segmentDist = 6371000 * Math.sqrt(target.lenSq);
-      const t = Math.min(1, lookAheadMeters / segmentDist);
-
+  if (currentSegmentIndex < gpxPoints.length - 1 && distanceToTarget < 50) {
+    let lookAheadMeters = 30 - distanceToTarget;
+    if (Date.now() - gpsUpdate > 300) lookAheadMeters += 10;
+    if (gpsSpeed > 4) lookAheadMeters += 10;
+    
+    if (lookAheadMeters > 0) {
+      const segmentDist = radSqToMeters(target.lenSq);
+      const t = Math.min(1, lookAheadMeters / segmentDist); // Waarom is dit nodig?
+  
       target.lon += target.dx * t;
       target.lat += target.dy * t / target.scale
     }
   }
 
-  return target
+  return {
+    target,
+    navPosition: bestProj,
+    distanceToRoute,
+    distanceToTarget
+  }
 }
 
 
@@ -278,9 +321,16 @@ function nextGPXPoint(pos, points) {
 function updateArrow() {
   if (!currentPosition || gpxPoints.length === 0) return;
   
-  // Bepaal het "huidige target"
-  let target = nextGPXPoint(currentPosition, gpxPoints);
-  if (!target) return;
+  // Bepaal het huidige target
+  let nav = nextGPXPoint(currentPosition, gpxPoints);
+  if (!nav) return;
+  const target = nav.target;
+
+  // Eerste meting na hervatten negeren
+  if (!resume) {
+    resume = true;
+    return;
+  }
 
   // GET BEARING
   const φ1 = degToRad(currentPosition.lat);
@@ -296,8 +346,15 @@ function updateArrow() {
 
   // Richting pijl aanpassen op basis van compass
   const prevRotation = displayedRotation;
-  const targetRotation = currentBearing - currentHeading;
-  displayedRotation = ((targetRotation + 540) % 360) - 180;
+
+  // Gebruik GPS-heading als die vrijwel gelijk is aan de compass-heading
+  let heading = currentHeading;
+  if (gpsHeading !== null && Date.now() - gpsSince >= 3000) {
+    if (angleDiff(currentHeading, gpsHeading) < 20) heading = gpsHeading;
+  }
+  
+  const targetRotation = ((currentBearing - heading + 540) % 360) - 180;
+  displayedRotation = prevRotation * 0.25 + targetRotation * 0.75; // Test met smoothing
 
   if (gpsSpeed > 2) {
     arrow.style.transition = "transform 1s linear";
@@ -309,10 +366,11 @@ function updateArrow() {
 
   // GEKLEURDE ACHTERGROND
   if (gpsHeading !== null && Date.now() - gpsSince >= 3000) {
-    let diff = Math.abs(currentBearing - gpsHeading) % 360;
-    if (Math.min(diff, 360 - diff) > 45) { // graden
+    if (angleDiff(currentBearing, gpsHeading) > 45) { // graden // + toevoegen: ook rood als afstand tot segment > 20 m
       document.body.style.backgroundColor = "red";
-      navigator.vibrate?.(200);
+      navigator.vibrate?.(200); // Werkt dit op iOS?
+      if (inactivityTimeout) clearTimeout(inactivityTimeout);
+      inactivityTimeout = setTimeout(stopTracking, INACTIVITY_LIMIT);
     } else {
       document.body.style.backgroundColor = "white";
     }
@@ -404,11 +462,11 @@ function updateMap() {
   const canvasHeight = mapCanvas.clientHeight;
   
   const cosLat = Math.cos(degToRad((gpxBounds.minLat + gpxBounds.maxLat) / 2));
-  const scaleX = Math.min(
+  const scaleY = Math.min(
     canvasWidth / ((gpxBounds.maxLon - gpxBounds.minLon) * cosLat),
     canvasHeight / (gpxBounds.maxLat - gpxBounds.minLat)
-  ) * cosLat;
-  const scaleY = scaleX / cosLat; // zodat verticale schaal klopt
+  );
+  const scaleX = scaleY * cosLat;
 
   // scaleY > scaleX
   const offsetX = 0 // (canvasWidth  - (gpxBounds.maxLon - gpxBounds.minLon) * scaleX) / 2 - 45;
@@ -664,7 +722,6 @@ toggleViewButton.onclick = () => {
     toggleViewButton.innerText = "Toon kaart";
     
     startTracking();
-    updateArrow();
   }
 };
 
@@ -691,3 +748,15 @@ overlay.addEventListener("click", startTracking);
 // Verbeterpunten tijdens testen 2:
 // * Beperkt aantal verhogingen segment-index per minuut?
 // * Iets doen bij aankomst: functioneel of voor het gevoel of een combinatie daarvan.
+
+// Verbeterpunten tijdens testen 3:
+// * Pauze-overlay minder transparant maken.
+// * Bij pauze GPS-heading en snelheid e.d. resetten?
+// * Bij look ahead tonen “over N meter”, of is dat verwarrend?
+// * Als er veel/grote richtingsveranderingen worden geregistreerd door de orientation listener de pijl vaker updaten?
+// * Afwijking als gebruiker telefoon scheef houdt voor bepaalde tijd met bepaalde weging gebruiken als standaardafwijking (zodat bij afslag pijl 90º draait i.p.v. 80º)?
+// - Of toon, als de gebruiker nog minder dan bijv. 20° is gedraaid t.o.v. de vorige heading en zich minder dan 20 meter vanaf het punt bevindt, het verschil tussen de huidige bearing en de volgende?????
+// - Of toon dat als extra pijl bovenin het scherm met het bijschrift: “Over N meter” o.i.d....
+// * Niet stoppen met globaal zoeken huidig segment bij eerste match binnen marge, enkele daarna kunnen nog beter zijn (of zelfs ver daarna, bij sommige routes). Of marge voor vroegtijdig “gevonden” kleiner maken, bijv. 10 m, of een combinatie van die twee.
+// * Als de laatste GPS-update meer dan N seconden geleden is, een laden-overlay tonen.
+// * Niet automatisch op pauze gaan door inactiviteit als er net een global search is geweest??
