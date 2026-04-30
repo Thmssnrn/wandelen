@@ -346,15 +346,19 @@ function updateArrow() {
 
   // Richting pijl aanpassen op basis van compass
   const prevRotation = displayedRotation;
+  
+  let heading = currentHeading;
 
   // Gebruik GPS-heading als die vrijwel gelijk is aan de compass-heading
-  let heading = currentHeading;
-  if (gpsHeading !== null && Date.now() - gpsSince >= 3000) {
-    if (angleDiff(currentHeading, gpsHeading) < 20) heading = gpsHeading;
+  if (gpsHeading !== null && Date.now() - gpsSince >= 3000 && angleDiff(currentHeading, gpsHeading) < 20) {
+    heading = gpsHeading;
   }
   
-  const targetRotation = ((currentBearing - heading + 540) % 360) - 180;
-  displayedRotation = prevRotation * 0.25 + targetRotation * 0.75; // Test met smoothing
+  const delta = ((currentBearing - heading - prevRotation + 540) % 360) - 180;
+  displayedRotation += delta * 0.75; // Test met smoothing
+
+  // -180º -> 180º weergeven
+  const normalized = ((displayedRotation + 180) % 360 + 360) % 360 - 180;
 
   if (gpsSpeed > 2) {
     arrow.style.transition = "transform 1s linear";
@@ -362,7 +366,7 @@ function updateArrow() {
     arrow.style.transition = "transform 0.25s linear";
   }
   arrow.style.transform = `rotate(${displayedRotation}deg)`;
-  arrowRotationText.innerText = `${Math.round(-displayedRotation)}°`;
+  arrowRotationText.innerText = `${-Math.round(normalized)}°`;
 
   // GEKLEURDE ACHTERGROND
   if (gpsHeading !== null && Date.now() - gpsSince >= 3000) {
