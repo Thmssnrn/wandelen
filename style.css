@@ -108,7 +108,7 @@ body {
 #userDot::after {
   content: "";
   position: absolute;
-  inset: 2px; /* Hoeveelheid krimp */
+  inset: 2.5px; /* Grootte witte ring */
   background: #0A84FF;
   border-radius: 50%;
   animation: pulse 2.5s ease-in-out infinite;
