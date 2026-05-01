@@ -71,6 +71,7 @@ body {
   transform-origin: center;
   transition: transform 0.25s ease-out;
   vertical-align: middle;
+  user-select: none;
 }
 
 #arrowRotation {
