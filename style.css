@@ -65,13 +65,12 @@ body {
 }
 
 #arrow {
-  display: inline-block;
   font-size: 300px;
-  /*transform-origin: center;*/
-  transition: transform 0.25s ease-out;
-  vertical-align: middle;
+  padding: 20px;
+  display: inline-block;
   text-align: center;
-  user-select: none;
+  font-family: ui-sans-serif, sans-serif;
+  transition: transform 0.25s ease-out;
 }
 
 #arrowRotation {
