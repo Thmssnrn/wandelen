@@ -170,6 +170,9 @@ function stopTracking() {
     watchId = null;
   }
   
+  gpsSpeed = null;
+  gpsSince += INACTIVITY_LIMIT;
+  
   // Stop timer
   if (inactivityTimeout) {
     clearTimeout(inactivityTimeout);
@@ -187,7 +190,11 @@ function stopTracking() {
 // COMPASS
 function handleOrientation(event) {
   if (currentView !== "compassView") return;
-  const UPDATE_INTERVAL = gpsSpeed > 2 ? 1000 : 250;  // m/s en ms
+  let UPDATE_INTERVAL = 250;
+  if (gpsSpeed > 2 && angleDiff(currentHeading, lastHeading) <= 30) {
+    UPDATE_INTERVAL = 1000;
+  }
+  
   const now = Date.now();
   if (now - lastUpdate < UPDATE_INTERVAL) return;
   lastUpdate = now;
@@ -355,7 +362,7 @@ function updateArrow() {
   }
   
   const delta = ((currentBearing - heading - prevRotation + 540) % 360) - 180;
-  displayedRotation += delta * 0.5; // Test met smoothing
+  displayedRotation += delta * 0.75; // Smoothing
 
   // -180º -> 180º weergeven
   const normalized = ((displayedRotation + 180) % 360 + 360) % 360 - 180;
@@ -753,12 +760,8 @@ overlay.addEventListener("click", startTracking);
 // * Iets doen bij aankomst: functioneel of voor het gevoel of een combinatie daarvan.
 
 // Verbeterpunten tijdens testen 3:
-// * Bij pauze GPS-heading en snelheid e.d. resetten?
 // * Bij look ahead tonen “over N meter”, of is dat verwarrend?
-// * Als er veel/grote richtingsveranderingen worden geregistreerd door de orientation listener de pijl vaker updaten?
 // * Afwijking als gebruiker telefoon scheef houdt voor bepaalde tijd met bepaalde weging gebruiken als standaardafwijking (zodat bij afslag pijl 90º draait i.p.v. 80º)?
 // - Of toon, als de gebruiker nog minder dan bijv. 20° is gedraaid t.o.v. de vorige heading en zich minder dan 20 meter vanaf het punt bevindt, het verschil tussen de huidige bearing en de volgende?????
 // - Of toon dat als extra pijl bovenin het scherm met het bijschrift: “Over N meter” o.i.d....
-// * Niet stoppen met globaal zoeken huidig segment bij eerste match binnen marge, enkele daarna kunnen nog beter zijn (of zelfs ver daarna, bij sommige routes). Of marge voor vroegtijdig “gevonden” kleiner maken, bijv. 10 m, of een combinatie van die twee.
 // * Als de laatste GPS-update meer dan N seconden geleden is, een laden-overlay tonen.
-// * Niet automatisch op pauze gaan door inactiviteit als er net een global search is geweest??
