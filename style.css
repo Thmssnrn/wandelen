@@ -67,9 +67,10 @@ body {
 #arrow {
   display: inline-block;
   font-size: 300px;
-  transform-origin: center;
+  /*transform-origin: center;*/
   transition: transform 0.25s ease-out;
   vertical-align: middle;
+  text-align: center;
   user-select: none;
 }
 
