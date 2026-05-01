@@ -75,7 +75,7 @@ function angleDiff(a, b) {
 
 // START
 async function startTracking() {
-  // Compass toestemming (iOS)
+  // Compass toestemming
   if (
     typeof DeviceOrientationEvent !== "undefined" &&
     typeof DeviceOrientationEvent.requestPermission === "function"
@@ -281,15 +281,14 @@ function nextGPXPoint(pos, points) {
   let target = { ...gpxPoints[currentSegmentIndex] }; // Maak een kopie
   const distanceToRoute = radSqToMeters(minDist)
   
-
-  if (distanceToRoute > Math.max(gpsAccuracy, 15)) {
-    bestProj.lat = pos.lat
-    bestProj.lon = pos.lon
-  } else if (distanceToRoute > 1000) {
+  if (distanceToRoute > 1000) {
     stopTracking();
     alert("**Let op!**\nKlik pas op *start* als je echt gaat starten!")
     return null;
-  }
+  } else if (distanceToRoute > Math.max(15, gpsAccuracy + 5)) {
+    bestProj.lat = pos.lat
+    bestProj.lon = pos.lon
+  } 
 
   const distanceToTarget = distanceMeters(target, bestProj)
 
@@ -322,15 +321,16 @@ function updateArrow() {
   if (!currentPosition || gpxPoints.length === 0) return;
   
   // Bepaal het huidige target
-  let nav = nextGPXPoint(currentPosition, gpxPoints);
+  const nav = nextGPXPoint(currentPosition, gpxPoints);
   if (!nav) return;
-  const target = nav.target;
-
+  
   // Eerste meting na hervatten negeren
   if (!resume) {
     resume = true;
     return;
   }
+
+  const { target, navPosition, distanceToRoute, distanceToTarget } = nav;
 
   // GET BEARING
   const φ1 = degToRad(currentPosition.lat);
@@ -355,7 +355,7 @@ function updateArrow() {
   }
   
   const delta = ((currentBearing - heading - prevRotation + 540) % 360) - 180;
-  displayedRotation += delta * 0.75; // Test met smoothing
+  displayedRotation += delta * 0.5; // Test met smoothing
 
   // -180º -> 180º weergeven
   const normalized = ((displayedRotation + 180) % 360 + 360) % 360 - 180;
@@ -370,9 +370,8 @@ function updateArrow() {
 
   // GEKLEURDE ACHTERGROND
   if (gpsHeading !== null && Date.now() - gpsSince >= 3000) {
-    if (angleDiff(currentBearing, gpsHeading) > 45) { // graden // + toevoegen: ook rood als afstand tot segment > 20 m
+    if (angleDiff(currentBearing, gpsHeading) > 45 || distanceToRoute > Math.max(25, gpsAccuracy + 5) {
       document.body.style.backgroundColor = "red";
-      navigator.vibrate?.(200); // Werkt dit op iOS?
       if (inactivityTimeout) clearTimeout(inactivityTimeout);
       inactivityTimeout = setTimeout(stopTracking, INACTIVITY_LIMIT);
     } else {
@@ -754,7 +753,6 @@ overlay.addEventListener("click", startTracking);
 // * Iets doen bij aankomst: functioneel of voor het gevoel of een combinatie daarvan.
 
 // Verbeterpunten tijdens testen 3:
-// * Pauze-overlay minder transparant maken.
 // * Bij pauze GPS-heading en snelheid e.d. resetten?
 // * Bij look ahead tonen “over N meter”, of is dat verwarrend?
 // * Als er veel/grote richtingsveranderingen worden geregistreerd door de orientation listener de pijl vaker updaten?
