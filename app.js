@@ -37,16 +37,21 @@ let elevMax = 8850; // Mount Everest
 
 // HTML elements
 const overlay = document.getElementById("userGestureOverlay");
+const startButton = document.getElementById("startButton");
+const uploadButton = document.getElementById("gpxUpload");
+const toggleViewButton = document.getElementById("toggleViewButton");
+
 const arrow = document.getElementById("arrow");
 const arrowRotationText = document.getElementById("arrowRotation");
 const distanceText = document.getElementById("distance");
 const elevation = document.getElementById("elevation");
+const nextTurnEl = document.getElementById("nextTurn");
+const nextTurnArrow = document.getElementById("nextTurnArrow");
+const nextTurnDistance = document.getElementById("nextTurnDistance");
 const debugHTML = document.getElementById("debug");
+
 const mapCanvas = document.getElementById("mapCanvas");
 const elevCanvas = document.getElementById("elevationCanvas");
-const startButton = document.getElementById("startButton");
-const uploadButton = document.getElementById("gpxUpload");
-const toggleViewButton = document.getElementById("toggleViewButton");
 const userDot = document.getElementById("userDot");
 
 // HELPERS
@@ -72,6 +77,7 @@ function angleDiff(a, b) {
   let d = Math.abs(a - b + 360) % 360;
   return Math.min(d, 360 - d);
 }
+
 
 // START
 async function startTracking() {
@@ -340,9 +346,9 @@ function updateArrow() {
   const { target, navPosition, distanceToRoute, distanceToTarget } = nav;
 
   // GET BEARING
-  const φ1 = degToRad(currentPosition.lat);
+  const φ1 = degToRad(navPosition.lat);
   const φ2 = degToRad(target.lat);
-  const Δλ = degToRad(target.lon - currentPosition.lon);
+  const Δλ = degToRad(target.lon - navPosition.lon);
   const y = Math.sin(Δλ) * Math.cos(φ2);
   const x =
     Math.cos(φ1) * Math.sin(φ2) -
@@ -383,6 +389,37 @@ function updateArrow() {
       inactivityTimeout = setTimeout(stopTracking, INACTIVITY_LIMIT);
     } else {
       document.body.style.backgroundColor = "white";
+    }
+  }
+
+  // TOON VOLGENDE BOCHT
+
+  // Zoek eerstvolgende relevante bocht
+  let nextTurn = null;
+  for (let i = currentSegmentIndex; i < gpxPoints.length - 1; i++) {
+    const angle = gpxPoints[i].turnAngle;
+    if (!angle) {
+      console.log(`Index ${i} heeft geen turnAngle`);
+      continue;
+    } else if (Math.abs(angle) > 45) {
+      nextTurn = { index: i, angle };
+      break;
+    }
+  }
+  
+  if (!nextTurn) {
+    nextTurnEl.classList.add("hidden");
+  } else {
+    // Afstand tot de bocht berekenen
+    const dist = distanceMeters(navPosition, gpxPoints[currentSegmentIndex])
+      + target.remainingDistance - gpxPoints[turnIndex].remainingDistance;
+  
+    if (dist > 200) {
+      nextTurnEl.classList.add("hidden");
+    } else {
+      nextTurnEl.classList.remove("hidden");
+      element.style.transform = `rotate(90deg) scaleX(${nextTurn.angle < 0 ? -1 : 1})`;
+      nextTurnDistance.innerText = `Over ${Math.round(dist / 5) * 5} m`;
     }
   }
 
@@ -568,7 +605,8 @@ uploadButton.addEventListener("change", function(e) {
         remainingDescent: null,
         remainingDistance: null,
         dx: null, dy: null,
-        scale: null, lenSq: null
+        scale: null, lenSq: null,
+        turnAngle: null
       });
     }
     
@@ -601,7 +639,7 @@ uploadButton.addEventListener("change", function(e) {
       }
     }
 
-    // Bereken alvast dx, dy, scale en lenSq (voor nextGPXPoint)
+    // Bereken alvast dx, dy, scale, lenSq (voor nextGPXPoint)
     for (let i = 0; i < gpxPoints.length - 1; i++) {
       const A = gpxPoints[i];
       const B = gpxPoints[i + 1];
@@ -610,6 +648,17 @@ uploadButton.addEventListener("change", function(e) {
       A.dx = (B.lon - A.lon) * A.scale;
       A.dy = B.lat - A.lat;
       A.lenSq = A.dx ** 2 + A.dy ** 2;
+    }
+
+    // Bereken alvast de hoeken tussen de segmenten
+    for (let i = 1; i < gpxPoints.length - 1; i++) {
+      const A = gpxPoints[i - 1];
+      const B = gpxPoints[i];
+      
+      const bearingA = radToDeg(Math.atan2(A.dy, A.dx));
+      const bearingB = radToDeg(Math.atan2(B.dy, B.dx));
+        
+      B.turnAngle = ((bearingB - bearingA + 540) % 360) - 180; // -180 → 180
     }
 
     // Bereken alvast de bounds voor de kaart
