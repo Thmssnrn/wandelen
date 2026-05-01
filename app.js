@@ -422,7 +422,11 @@ function updateArrow() {
       nextTurnEl.classList.add("hidden");
     } else {
       nextTurnEl.classList.remove("hidden");
-      nextTurnArrow.style.transform = `rotate(90deg) scaleX(${nextTurn.angle < 0 ? -1 : 1})`;
+      if (nextTurn.angle > 0) {
+        nextTurnArrow.style.transform = "rotate(270deg) scaleX(1)";
+      } else {
+        nextTurnArrow.style.transform = "rotate(90deg) scaleX(-1)";
+      }
       nextTurnDistance.innerText = `Over ${Math.round(dist / 5) * 5} m`;
     }
   }
