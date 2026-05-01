@@ -33,15 +33,12 @@
     <button id="toggleViewButton">Toon kaart</button>
   </div>
   
-  <!-- COMPASS VIEW -->
   <div id="compassView" class="view active">
     <div id="arrowRotation"></div>
     <div id="arrow">↑</div>
   </div>
   
-  <!-- MAP VIEW -->
   <div id="mapView" class="view">
-    
     <div id="mapContainer">
       <canvas id="mapCanvas"></canvas>
       <div id="userDot"></div>
@@ -50,8 +47,11 @@
     <canvas id="elevationCanvas"></canvas>
   </div>
 
-  <div id="distance">Restafstand: 0 km</div>
-  <div id="elevation">⭡ 0 m, ⭣ 0 m</div>
+  <div id="infoBar">
+    <span id="distance">Restafstand: 0 km</span>
+    <span>•</span>
+    <span id="elevation">⭡ 0 m, ⭣ 0 m</span>
+  </div>
 
   <div id="debug"></div>
   
