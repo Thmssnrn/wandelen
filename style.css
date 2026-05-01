@@ -18,6 +18,19 @@ body {
   overflow: auto;
 }
 
+.view {
+  display: none;
+  height: 100vh;
+  width: 100vw;
+}
+
+.view.active {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  width: 100vw;
+}
+
 #controls {
   display: flex;
   justify-content: center;
@@ -37,25 +50,24 @@ body {
   font-family: ui-sans-serif, sans-serif;
 }
 
-.view {
-  display: none;
-  height: 100vh;
-  width: 100vw;
+#nextTurn {
+  text-align: center;
+  padding-top: 20px;
+  background: #333;
 }
 
-.view.active {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
+#nextTurnArrow {
+  font-size: 28px;
+}
+
+#nextTurnDistance {
+  font-size: 16px;
 }
 
 #arrow {
   font-size: 300px;
-  padding: 20px;
-  display: inline-block;
-  text-align: center;
-  font-family: ui-sans-serif, sans-serif;
+  line-height: 1;
+  transform-origin: center;
   transition: transform 0.25s ease-out;
 }
 
@@ -63,6 +75,15 @@ body {
   font-size: 24px;
   margin-top: 10px;
   font-family: ui-sans-serif, sans-serif;
+}
+
+#infoBar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  margin-bottom: 25px;
 }
 
 #distance {
