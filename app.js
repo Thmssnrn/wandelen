@@ -370,7 +370,7 @@ function updateArrow() {
 
   // GEKLEURDE ACHTERGROND
   if (gpsHeading !== null && Date.now() - gpsSince >= 3000) {
-    if (angleDiff(currentBearing, gpsHeading) > 45 || distanceToRoute > Math.max(25, gpsAccuracy + 5) {
+    if (angleDiff(currentBearing, gpsHeading) > 45 || distanceToRoute > Math.max(25, gpsAccuracy + 5)) {
       document.body.style.backgroundColor = "red";
       if (inactivityTimeout) clearTimeout(inactivityTimeout);
       inactivityTimeout = setTimeout(stopTracking, INACTIVITY_LIMIT);
