@@ -2,6 +2,7 @@ let gpxPoints = [];
 let gpxBounds = null;
 
 let currentHeading = 0;
+let lastHeading = 0;
 let currentBearing = 0;
 let displayedRotation = 0;
 
@@ -116,19 +117,16 @@ async function startTracking() {
 
         if (gpsSpeed < 2) {
           gpsSince = NaN;
-        } else {
-          if (isNaN(gpsSince)) {
+        } else if (isNaN(gpsSince)) {
             gpsSince = Date.now();
-          }
-          else if (previousPosition !== null && gpsHeading === null && Date.now() - gpsSince >= 3000) {
-            // Hier moeten we een aparte functie voor maken.
-            const lat1 = degToRad(previousPosition.lat);
-            const lat2 = degToRad(currentPosition.lat);
-            const dLon = degToRad(currentPosition.lon - previousPosition.lon);
-            const y = Math.sin(dLon) * Math.cos(lat2);
-            const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-            gpsHeading = radToDeg(Math.atan2(y, x));
-          }
+        } else if (!gpsHeading && previousPosition && Date.now() - gpsSince >= 3000) {
+          // Hier moeten we een aparte functie voor maken.
+          const lat1 = degToRad(previousPosition.lat);
+          const lat2 = degToRad(currentPosition.lat);
+          const dLon = degToRad(currentPosition.lon - previousPosition.lon);
+          const y = Math.sin(dLon) * Math.cos(lat2);
+          const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+          gpsHeading = radToDeg(Math.atan2(y, x));
         }
       
         if (currentView === "compassView") updateArrow();
@@ -145,6 +143,7 @@ async function startTracking() {
   
   // Start User Inactivity Listeners
   if (!inactivityHandler) {
+    inactivityHandler = true;
     ["mousedown", "touchstart"].forEach(event => {
       document.addEventListener(event, () => {
         if (inactivityTimeout) clearTimeout(inactivityTimeout);
@@ -177,13 +176,16 @@ function stopTracking() {
   }
   
   gpsSpeed = null;
-  gpsSince += INACTIVITY_LIMIT;
+  gpsSince = NaN;
   
   // Stop timer
   if (inactivityTimeout) {
     clearTimeout(inactivityTimeout);
     inactivityTimeout = null;
   }
+
+  // Nomaliseer displayedRotation
+  displayedRotation = ((displayedRotation) % 360 + 360) % 360;
   
   // fullscreen "overlay button" listener
   overlay.style.display = "block";
@@ -204,7 +206,9 @@ function handleOrientation(event) {
   const now = Date.now();
   if (now - lastUpdate < UPDATE_INTERVAL) return;
   lastUpdate = now;
-  
+
+  lastHeading = currentHeading;
+
   if (!isNaN(event.webkitCompassHeading)) {
     currentHeading = event.webkitCompassHeading;
   } else if (gpsHeading !== null && Date.now() - gpsSince >= 3000) {
@@ -402,7 +406,7 @@ function updateArrow() {
       console.log(`Index ${i} heeft geen turnAngle`);
       continue;
     } else if (Math.abs(angle) > 45) {
-      nextTurn = { index: i, angle };
+      nextTurn = { index: i, angle }; // Is dit de beste manier om dit op te slaan?
       break;
     }
   }
@@ -412,13 +416,13 @@ function updateArrow() {
   } else {
     // Afstand tot de bocht berekenen
     const dist = distanceMeters(navPosition, gpxPoints[currentSegmentIndex])
-      + target.remainingDistance - gpxPoints[turnIndex].remainingDistance;
+      + target.remainingDistance - gpxPoints[nextTurn.index].remainingDistance;
   
     if (dist > 200) {
       nextTurnEl.classList.add("hidden");
     } else {
       nextTurnEl.classList.remove("hidden");
-      element.style.transform = `rotate(90deg) scaleX(${nextTurn.angle < 0 ? -1 : 1})`;
+      nextTurnArrow.style.transform = `rotate(90deg) scaleX(${nextTurn.angle < 0 ? -1 : 1})`;
       nextTurnDistance.innerText = `Over ${Math.round(dist / 5) * 5} m`;
     }
   }
@@ -477,7 +481,6 @@ function buildPath(path, start, end, scaleX, scaleY, offsetX, offsetY) {
     const midY = (currY + nextY) / 2;
 
     path.quadraticCurveTo(currX, currY, midX, midY);
-    console.log({currX, currY, midX, midY, nextX, nextY});
   }
 
   // Laatste punt
@@ -644,7 +647,7 @@ uploadButton.addEventListener("change", function(e) {
       const A = gpxPoints[i];
       const B = gpxPoints[i + 1];
 
-      A.scale = Math.cos(degToRad(A.lat + B.lat) / 2)
+      A.scale = Math.cos(degToRad((A.lat + B.lat) / 2));
       A.dx = (B.lon - A.lon) * A.scale;
       A.dy = B.lat - A.lat;
       A.lenSq = A.dx ** 2 + A.dy ** 2;
