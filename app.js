@@ -133,7 +133,7 @@ async function startTracking() {
         } else if (isNaN(gpsSince)) {
             gpsSince = Date.now();
         } else if (gpsHeading == null && previousPosition && Date.now() - gpsSince >= 3000) {
-          if distanceMeters(previousPosition, currentPosition) > Math.max(10, gpsAccuracy) {
+          if (distanceMeters(previousPosition, currentPosition) > Math.max(10, gpsAccuracy)) {
             // Hier moeten we een aparte functie voor maken.
             const lat1 = degToRad(previousPosition.lat);
             const lat2 = degToRad(currentPosition.lat);
