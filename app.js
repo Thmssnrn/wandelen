@@ -43,6 +43,7 @@ let arrowRotationInt = 0;
 let showNextTurn = true;
 let remainingDistanceInt = 0;
 let elevationText = "";
+let backgroundColor = "black";
 
 // HTML elements
 const overlay = document.getElementById("userGestureOverlay");
@@ -132,13 +133,15 @@ async function startTracking() {
         } else if (isNaN(gpsSince)) {
             gpsSince = Date.now();
         } else if (gpsHeading == null && previousPosition && Date.now() - gpsSince >= 3000) {
-          // Hier moeten we een aparte functie voor maken.
-          const lat1 = degToRad(previousPosition.lat);
-          const lat2 = degToRad(currentPosition.lat);
-          const dLon = degToRad(currentPosition.lon - previousPosition.lon);
-          const y = Math.sin(dLon) * Math.cos(lat2);
-          const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-          gpsHeading = radToDeg(Math.atan2(y, x));
+          if distanceMeters(previousPosition, currentPosition) > Math.max(10, gpsAccuracy) {
+            // Hier moeten we een aparte functie voor maken.
+            const lat1 = degToRad(previousPosition.lat);
+            const lat2 = degToRad(currentPosition.lat);
+            const dLon = degToRad(currentPosition.lon - previousPosition.lon);
+            const y = Math.sin(dLon) * Math.cos(lat2);
+            const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+            gpsHeading = radToDeg(Math.atan2(y, x));
+          }
         }
       
         if (currentView === "compassView") updateArrow();
@@ -385,11 +388,12 @@ function updateArrow() {
 
   // Richting pijl aanpassen op basis van compass
   const prevRotation = displayedRotation;
+  const useGpsHeading = gpsHeading !== null && Date.now() - gpsSince >= 3000
   
   let heading = currentHeading;
   
   // Gebruik GPS-heading als die vrijwel gelijk is aan de compass-heading (voor als de gebruiker het apparaat scheef houdt, dan moet de pijl meedraaien)
-  if (gpsHeading !== null && Date.now() - gpsSince >= 3000 && angleDiff(currentHeading, gpsHeading) < 20) {
+  if (useGpsHeading && angleDiff(currentHeading, gpsHeading) < 20) {
     heading = gpsHeading;
   }
 
@@ -418,15 +422,20 @@ function updateArrow() {
   }
 
   // GEKLEURDE ACHTERGROND
-  if (gpsHeading !== null && Date.now() - gpsSince >= 3000) {
-    console.log(`Er is een gpsHeading beschikbaar (${(Date.now() - gpsSince) / 1000} s).`);
-    if (angleDiff(currentBearing, gpsHeading) > 45 || distanceToRoute > Math.max(25, gpsAccuracy)) {
-      document.body.style.backgroundColor = "red";
-      if (inactivityTimeout) clearTimeout(inactivityTimeout);
-      inactivityTimeout = setTimeout(stopTracking, INACTIVITY_LIMIT);
-    } else {
-      document.body.style.backgroundColor = "black";
-    }
+  if (
+    useGpsHeading && backgroundColor !== "red" && 
+    (angleDiff(currentBearing, gpsHeading) > 45 || distanceToRoute > Math.max(25, gpsAccuracy))
+  ) {
+    document.body.style.backgroundColor = "red";
+    backgroundColor = "red";
+    
+    if (inactivityTimeout) clearTimeout(inactivityTimeout);
+    
+  } else if (backgroundColor !== "black") {
+    document.body.style.backgroundColor = "black";
+    backgroundColor = "black";
+    
+    inactivityTimeout = setTimeout(stopTracking, INACTIVITY_LIMIT);
   }
 
   // TOON VOLGENDE BOCHT
@@ -661,11 +670,8 @@ uploadButton.addEventListener("change", function(e) {
         dx: null, dy: null,
         scale: null, lenSq: null,
         turnAngle: null,
-        time: trkpts[i].getAttribute("time")
       });
     }
-    const hasTime = gpxPoints.some(p => p.time !== null);
-    console.log("Heeft tijddata:", hasTime);
     
     // Bereken alvast de hoogtemeters
     let ascent = 0;
