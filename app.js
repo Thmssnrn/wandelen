@@ -23,6 +23,7 @@ let resume = true;
 
 let lastSegmentIndex = -1;
 let currentSegmentIndex = 0;
+let nextTurn = null;
 let lastUpdate = null;
 let currentView = "compassView";
 
@@ -36,6 +37,13 @@ let elevProfile = [];
 let elevMin = -430; // Oevers Dode Zee
 let elevMax = 8850; // Mount Everest
 
+// DOM content
+let arrowTransition = "";
+let arrowRotationInt = 0;
+let showNextTurn = true;
+let remainingDistanceInt = 0;
+let elevationText = "";
+
 // HTML elements
 const overlay = document.getElementById("userGestureOverlay");
 const startButton = document.getElementById("startButton");
@@ -44,7 +52,7 @@ const toggleViewButton = document.getElementById("toggleViewButton");
 
 const arrow = document.getElementById("arrow");
 const arrowRotationText = document.getElementById("arrowRotation");
-const distanceText = document.getElementById("distance");
+const remainingDistanceText = document.getElementById("distance");
 const elevation = document.getElementById("elevation");
 const nextTurnEl = document.getElementById("nextTurn");
 const nextTurnArrow = document.getElementById("nextTurnArrow");
@@ -79,6 +87,10 @@ function angleDiff(a, b) {
   return Math.min(d, 360 - d);
 }
 
+function angleDiffSigned(a, b) {
+  return (a - b + 540) % 360 - 180;
+}
+
 
 // START
 async function startTracking() {
@@ -111,7 +123,7 @@ async function startTracking() {
         };
 
         gpsHeading = pos.coords.heading;
-        gpsSpeed = pos.coords.speed * 3.6; // m/s -> km/h
+        gpsSpeed = (pos.coords.speed ?? 0) * 3.6; // m/s -> km/h
         gpsAccuracy = pos.coords.accuracy;
         gpsUpdate = Date.now();
 
@@ -119,7 +131,7 @@ async function startTracking() {
           gpsSince = NaN;
         } else if (isNaN(gpsSince)) {
             gpsSince = Date.now();
-        } else if (!gpsHeading && previousPosition && Date.now() - gpsSince >= 3000) {
+        } else if (gpsHeading == null && previousPosition && Date.now() - gpsSince >= 3000) {
           // Hier moeten we een aparte functie voor maken.
           const lat1 = degToRad(previousPosition.lat);
           const lat2 = degToRad(currentPosition.lat);
@@ -238,7 +250,8 @@ function nextGPXPoint(pos, points) {
   for (let i = start; i < end; i++) {
     // Projectie -> afstand tot het segment ipv het punt
     const point = points[i];
-    
+
+    if (point.lenSq === 0) continue;
     const t = ((pos.lat - point.lat) * point.dy + (pos.lon - point.lon) * point.dx) / point.lenSq;
     const tClamped = Math.max(0, Math.min(1, t));
 
@@ -267,7 +280,8 @@ function nextGPXPoint(pos, points) {
       
       // Projectie -> afstand tot het segment ipv het punt
       const point = points[i];
-  
+
+      if (point.lenSq === 0) continue;
       const t = ((pos.lat - point.lat) * point.dy + (pos.lon - point.lon) * point.dx) / point.lenSq;
       const tClamped = Math.max(0, Math.min(1, t));
 
@@ -299,13 +313,21 @@ function nextGPXPoint(pos, points) {
   const distanceToRoute = radSqToMeters(minDist)
   
   if (distanceToRoute > 1000) {
-    stopTracking();
-    alert("**Let op!**\nKlik pas op *start* als je echt gaat starten!")
+    alert("Let op!\nKlik pas op start als je echt gaat starten!")
     return null;
-  } else if (distanceToRoute > Math.max(15, gpsAccuracy + 5)) {
-    bestProj.lat = pos.lat
-    bestProj.lon = pos.lon
   } 
+
+  const snapStrength = Math.max(0, Math.min(1, 
+    1 - distanceToRoute / Math.max(gpsAccuracy + 15, 100), // Verhoog 15 voor sterker snappen
+  ));
+  // Grote gpsAccuracy == slechte GPS-verbinding, dus:
+  // - Goede GPS  ->  lage snapStrength (vertrouw GPS-locatie wel)
+  // - Slechte GPS -> hoge snapStrength (vertrouw GPS-locatie niet)
+  // - Ver van route  -> lage snapStrength (waarschijnlijk van het pad)
+  // - Dichtbij route -> hoge snapStrength (waarschijnlijk op het pad)
+  
+  bestProj.lat = pos.lat + (bestProj.lat - pos.lat) * snapStrength;
+  bestProj.lon = pos.lon + (bestProj.lon - pos.lon) * snapStrength;
 
   const distanceToTarget = distanceMeters(target, bestProj)
 
@@ -365,83 +387,108 @@ function updateArrow() {
   const prevRotation = displayedRotation;
   
   let heading = currentHeading;
-
-  // Gebruik GPS-heading als die vrijwel gelijk is aan de compass-heading
+  
+  // Gebruik GPS-heading als die vrijwel gelijk is aan de compass-heading (voor als de gebruiker het apparaat scheef houdt, dan moet de pijl meedraaien)
   if (gpsHeading !== null && Date.now() - gpsSince >= 3000 && angleDiff(currentHeading, gpsHeading) < 20) {
     heading = gpsHeading;
   }
-  
-  const delta = ((currentBearing - heading - prevRotation + 540) % 360) - 180;
-  displayedRotation += delta * 0.75; // Smoothing
 
-  // -180º -> 180º weergeven
-  const normalized = ((displayedRotation + 180) % 360 + 360) % 360 - 180;
-
+  let alpha;
   if (gpsSpeed > 2) {
-    arrow.style.transition = "transform 1s linear";
+    if (arrowTransition !== "transform 1s linear") {
+      arrow.style.transition = "transform 1s linear";
+      arrowTransition = "transform 1s linear";
+    }
+    alpha = 0.95; // Weinig smoothing
   } else {
-    arrow.style.transition = "transform 0.25s linear";
+    if (arrowTransition !== "transform 0.25s linear") {
+      arrow.style.transition = "transform 0.25s linear";
+      arrowTransition = "transform 0.25s linear";
+    }
+    alpha = 0.75; // Veel smoothing
   }
-  arrow.style.transform = `rotate(${displayedRotation}deg)`;
-  arrowRotationText.innerText = `${-Math.round(normalized)}°`;
+  
+  displayedRotation += angleDiffSigned(currentBearing - heading, displayedRotation) * alpha;
+  const normalized = ((Math.round(displayedRotation) + 180) % 360 + 360) % 360 - 180; // -180º -> 180º
+  
+  if (arrowRotationInt != normalized) {
+    arrow.style.transform = `rotate(${displayedRotation}deg)`;
+    arrowRotationText.innerText = `${-normalized}°`;
+    arrowRotationInt = normalized;
+  }
 
   // GEKLEURDE ACHTERGROND
   if (gpsHeading !== null && Date.now() - gpsSince >= 3000) {
-    if (angleDiff(currentBearing, gpsHeading) > 45 || distanceToRoute > Math.max(25, gpsAccuracy + 5)) {
+    console.log(`Er is een gpsHeading beschikbaar (${(Date.now() - gpsSince) / 1000} s).`);
+    if (angleDiff(currentBearing, gpsHeading) > 45 || distanceToRoute > Math.max(25, gpsAccuracy)) {
       document.body.style.backgroundColor = "red";
       if (inactivityTimeout) clearTimeout(inactivityTimeout);
       inactivityTimeout = setTimeout(stopTracking, INACTIVITY_LIMIT);
     } else {
-      document.body.style.backgroundColor = "white";
+      document.body.style.backgroundColor = "black";
     }
   }
 
   // TOON VOLGENDE BOCHT
-
-  // Zoek eerstvolgende relevante bocht
-  let nextTurn = null;
-  for (let i = currentSegmentIndex; i < gpxPoints.length - 1; i++) {
-    const angle = gpxPoints[i].turnAngle;
-    if (!angle) {
-      console.log(`Index ${i} heeft geen turnAngle`);
-      continue;
-    } else if (Math.abs(angle) > 45) {
-      nextTurn = { index: i, angle }; // Is dit de beste manier om dit op te slaan?
-      break;
+  if (!nextTurn || nextTurn.index < currentSegmentIndex) {
+    for (let i = currentSegmentIndex; i < gpxPoints.length - 1; i++) {
+      const angle = gpxPoints[i].turnAngle;
+      if (angle == null) {
+        console.log(`Index ${i} heeft geen turnAngle`);
+        continue;
+      } else if (Math.abs(angle) > 45) {
+        nextTurn = { index: i, angle };
+        nextTurnArrow.style.transform = angle > 0
+          ? "rotate(90deg) scaleX(-1)"
+          : "rotate(270deg) scaleX(1)";
+        
+        break;
+      }
     }
   }
-  
+    
   if (!nextTurn) {
-    nextTurnEl.classList.add("hidden");
+    if (showNextTurn) {
+      nextTurnEl.style.display = "none";
+      showNextTurn = false;
+    }
   } else {
-    // Afstand tot de bocht berekenen
-    const dist = distanceMeters(navPosition, gpxPoints[currentSegmentIndex])
+    nextTurn.dist = distanceMeters(navPosition, gpxPoints[currentSegmentIndex])
       + target.remainingDistance - gpxPoints[nextTurn.index].remainingDistance;
   
-    if (dist > 200) {
-      nextTurnEl.classList.add("hidden");
-    } else {
-      nextTurnEl.classList.remove("hidden");
-      if (nextTurn.angle > 0) {
-        nextTurnArrow.style.transform = "rotate(90deg) scaleX(-1)";
-      } else {
-        nextTurnArrow.style.transform = "rotate(270deg) scaleX(1)";
+    if (nextTurn.dist > 80) {
+      if (showNextTurn) {
+        nextTurnEl.style.display = "none";
+        showNextTurn = false;
       }
+    } else {
+      if (!showNextTurn) {
+        nextTurnEl.style.display = "block";
+        showNextTurn = true;
+      }
+      
       nextTurnDistance.innerText = `Over ${Math.round(dist / 5) * 5} m`;
     }
   }
 
   // RESTERENDE AFSTAND
-  const rest = target.remainingDistance + distanceMeters(currentPosition, target);
-  distanceText.innerText =
-    rest >= 995 ?
-    `Nog ${Math.round(rest / 100) / 10} km`.replace('.', ',') :
-    `Nog ${Math.round(rest / 10) * 10} m`.replace('.', ',');
+  const rest = target.remainingDistance + distanceToTarget; // in meters
+  if (rest >= 995) {
+    if (remainingDistanceInt !== Math.round(rest / 100)) {
+      remainingDistanceInt = Math.round(rest / 100);
+      remainingDistanceText.innerText = `Nog ${remainingDistanceInt / 10} km`.replace('.', ',');
+    }
+  } else {
+    remainingDistanceText.innerText = `Nog ${Math.round(rest / 10) * 10} m`;
+  }
 
   // HOOGTEMETERS
   const elev = gpxPoints[currentSegmentIndex];
-  elevation.style.display = (gpxPoints[0].remainingAscent > 75 && gpxPoints[0].remainingDescent > 75) ? "block" : "none";
-  elevation.innerText = `⭡ ${Math.round(elev.remainingAscent)} m, ⭣ ${Math.round(elev.remainingDescent)} m`;
+  newText = `⭡ ${Math.round(elev.remainingAscent)} m, ⭣ ${Math.round(elev.remainingDescent)} m`;
+  if (elevationText !== newText) {
+    elevation.innerText = newText;
+    elevationText = newText;
+  }
   
   // DEBUG
   debugHTML.innerHTML = `
@@ -603,7 +650,7 @@ uploadButton.addEventListener("change", function(e) {
 
     gpxPoints = [];
     for (let i = 0; i < trkpts.length; i++) {
-      const eleNode = trkpts[i].getElementsByTagName("ele")[0];      
+      const eleNode = trkpts[i].getElementsByTagName("ele")[0];
       gpxPoints.push({
         lat: parseFloat(trkpts[i].getAttribute("lat")),
         lon: parseFloat(trkpts[i].getAttribute("lon")),
@@ -613,9 +660,12 @@ uploadButton.addEventListener("change", function(e) {
         remainingDistance: null,
         dx: null, dy: null,
         scale: null, lenSq: null,
-        turnAngle: null
+        turnAngle: null,
+        time: trkpts[i].getAttribute("time")
       });
     }
+    const hasTime = gpxPoints.some(p => p.time !== null);
+    console.log("Heeft tijddata:", hasTime);
     
     // Bereken alvast de hoogtemeters
     let ascent = 0;
@@ -631,6 +681,8 @@ uploadButton.addEventListener("change", function(e) {
         else descent -= delta; // - (negatieve delta) === + positieve delta
       }
     }
+    
+    elevation.style.display = (gpxPoints[0].remainingAscent > 75 && gpxPoints[0].remainingDescent > 75) ? "block" : "none"; //!
 
     elevProfile = gpxPoints.map(p => p.ele);
     elevMin = Math.min(...elevProfile);
@@ -741,7 +793,10 @@ uploadButton.addEventListener("change", function(e) {
 
 // Load saved GPX
 let saved = localStorage.getItem("gpxPoints");
-if (saved) gpxPoints = JSON.parse(saved);
+if (saved) {
+  gpxPoints = JSON.parse(saved);
+  elevation.style.display = (gpxPoints[0].remainingAscent > 75 && gpxPoints[0].remainingDescent > 75) ? "block" : "none"; //!
+}
 saved = localStorage.getItem("gpxBounds");
 if (saved) gpxBounds = JSON.parse(saved);
 
@@ -803,7 +858,6 @@ overlay.addEventListener("click", startTracking);
 // * Veel listeners staan er dubbel in.
 // * Is het nog nodig om het GPS-pollen te stoppen als de kaart wordt getoond?
 // * Als de route alleen omhoog/omlaag gaat, ook hoogteprofiel en hoogte-informatie tonen.
-// * We kunnen een simpeler alternatief gebruiken voor de haversine-functie.
 
 // Verbeterpunten tijdens testen 1:
 // * We kunnen ook een knop toevoegen dat de gebruiker ergens al geweest is, die de currentSegmentIndex verhoogt, en/of een knop die aangeeft dat de kant die de pijl op wijst niet mogelijk is (geen pad), die het zoekbereik tijdelijk uitschakelt.
@@ -821,3 +875,4 @@ overlay.addEventListener("click", startTracking);
 // - Of toon, als de gebruiker nog minder dan bijv. 20° is gedraaid t.o.v. de vorige heading en zich minder dan 20 meter vanaf het punt bevindt, het verschil tussen de huidige bearing en de volgende?????
 // - Of toon dat als extra pijl bovenin het scherm met het bijschrift: “Over N meter” o.i.d....
 // * Als de laatste GPS-update meer dan N seconden geleden is, een laden-overlay tonen.
+// - Of de gpsAccuracy + laatste update tonen.
