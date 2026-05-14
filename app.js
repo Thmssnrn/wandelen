@@ -442,10 +442,7 @@ function updateArrow() {
   if (!nextTurn || nextTurn.index < currentSegmentIndex) {
     for (let i = currentSegmentIndex; i < gpxPoints.length - 1; i++) {
       const angle = gpxPoints[i].turnAngle;
-      if (angle == null) {
-        console.log(`Index ${i} heeft geen turnAngle`);
-        continue;
-      } else if (Math.abs(angle) > 45) {
+      if (gpxPoints[i].isIntersection) {
         nextTurn = { index: i, angle };
         nextTurnArrow.style.transform = angle > 0
           ? "rotate(90deg) scaleX(-1)"
@@ -476,7 +473,7 @@ function updateArrow() {
         showNextTurn = true;
       }
       
-      nextTurnDistance.innerText = `Over ${Math.round(dist / 5) * 5} m`;
+      nextTurnDistance.innerText = `Over ${Math.round(nextTurn.dist / 5) * 5} m`;
     }
   }
 
@@ -629,6 +626,212 @@ function updateMap() {
   }
 }
 
+// ===== Helpers =====
+function bearing(a, b) {
+  const lat1 = degToRad(a.lat);
+  const lat2 = degToRad(b.lat);
+  const dLon = degToRad(b.lon - a.lon);
+
+  const y = Math.sin(dLon) * Math.cos(lat2);
+
+  const x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) *
+      Math.cos(lat2) *
+      Math.cos(dLon);
+
+  return (radToDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
+// Fetch OSM data
+async function fetchOSMData(gpxPoints) {
+  const RADIUS = 20;
+  
+  const aroundQueries = gpxPoints
+    .map(
+      p => `
+        way
+          ["highway"~"path|track|footway|cycleway|steps"]
+          (around:${RADIUS},${p.lat},${p.lon});
+      `
+    )
+    .join("\n");
+
+  const query = `
+  [out:json][timeout:25];
+
+  (
+    ${aroundQueries}
+  );
+
+  out body;
+  >;
+  out skel qt;
+  `;
+
+  const response = await fetch(
+    "https://overpass-api.de/api/interpreter",
+    {
+      method: "POST",
+      body: new URLSearchParams({
+        data: query
+      }),
+      headers: {
+        "Content-Type":
+          "application/x-www-form-urlencoded"
+      }
+    }
+  );
+
+  const data = await response.json();
+
+  console.log("OSM DATA", data);
+
+  // ===== Node map =====
+
+  const nodeMap = new Map();
+
+  for (const el of data.elements) {
+    if (el.type === "node") {
+      nodeMap.set(el.id, {
+        lat: el.lat,
+        lon: el.lon
+      });
+    }
+  }
+
+  // ===== Adjacency graph =====
+
+  const adjacency = new Map();
+
+  for (const way of data.elements) {
+    if (el.type !== "way") continue;
+
+    for (let i = 0; i < way.nodes.length - 1; i++) {
+      const a = way.nodes[i];
+      const b = way.nodes[i + 1];
+
+      if (!adjacency.has(a)) {
+        adjacency.set(a, new Set());
+      }
+
+      if (!adjacency.has(b)) {
+        adjacency.set(b, new Set());
+      }
+
+      adjacency.get(a).add(b);
+      adjacency.get(b).add(a);
+    }
+  }
+
+  // ===== Detect intersections =====
+
+  const intersections = [];
+
+  for (const [nodeId, neighbors] of adjacency.entries()) {
+    // >= 3 verbindingen = kruispunt
+    if (neighbors.size >= 3) {
+      const node = nodeMap.get(nodeId);
+
+      if (node) {
+        intersections.push({
+          id: nodeId,
+          lat: node.lat,
+          lon: node.lon,
+          neighbors: [...neighbors]
+        });
+      }
+    }
+  }
+
+  console.log(
+    "Intersections found:",
+    intersections.length
+  );
+
+  // ===== Match intersections to GPX =====
+
+  for (const gpxPoint of gpxPoints) {
+    gpxPoint.isIntersection = false;
+    gpxPoint.intersectionData = null;
+  }
+
+  intersections.forEach(intersection => {
+    let nearestIndex = -1;
+    let nearestDistance = Infinity;
+
+    for (let i = 0; i < gpxPoints.length; i++) {
+      const dist = distanceMeters(
+        gpxPoints[i],
+        intersection
+      );
+
+      if (dist < nearestDistance) {
+        nearestDistance = dist;
+        nearestIndex = i;
+      }
+    }
+
+    // Alleen markeren als dichtbij genoeg
+    if (
+      nearestIndex !== -1 &&
+      nearestDistance < 10
+    ) {
+      const gpxPoint = gpxPoints[nearestIndex];
+
+      gpxPoint.isIntersection = true;
+
+      gpxPoint.intersectionData = {
+        osmNodeId: intersection.id,
+        distance: nearestDistance,
+        connectedSegments:
+          intersection.neighbors.length
+      };
+    }
+  });
+
+  // ===== Determine turn direction =====
+
+  for (
+    let i = 1;
+    i < gpxPoints.length - 1;
+    i++
+  ) {
+    const point = gpxPoints[i];
+
+    if (!point.isIntersection) continue;
+
+    const prev = gpxPoints[i - 1];
+    const next = gpxPoints[i + 1];
+
+    const incomingBearing = bearing(prev, point);
+    const outgoingBearing = bearing(point, next);
+
+    const turn = angleDiffSigned(
+      outgoingBearing,
+      incomingBearing
+    );
+
+    let direction = "straight";
+
+    if (turn > 30) {
+      direction = "right";
+    } else if (turn < -30) {
+      direction = "left";
+    }
+
+    point.turn = {
+      angle: turn,
+      direction
+    };
+  }
+
+  return {
+    data,
+    intersections,
+    gpxPoints
+  };
+}
 
 // START BUTTON
 startButton.addEventListener("click", startTracking);
@@ -670,6 +873,7 @@ uploadButton.addEventListener("change", function(e) {
         dx: null, dy: null,
         scale: null, lenSq: null,
         turnAngle: null,
+        isIntersection: null
       });
     }
     
@@ -724,6 +928,12 @@ uploadButton.addEventListener("change", function(e) {
       const bearingB = radToDeg(Math.atan2(B.dy, B.dx));
         
       B.turnAngle = ((bearingB - bearingA + 540) % 360) - 180; // -180 → 180
+      gpxPoints[i].isIntersection = Math.abs(B.turnAngle) > 45;
+    }
+
+    // Bekijk of er bochten zijn a.d.h.v. OSM-data
+    if (confirm("Heb je een stabiele WiFi-verbinding?")) {
+      fetchOSMData();
     }
 
     // Bereken alvast de bounds voor de kaart
