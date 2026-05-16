@@ -255,7 +255,7 @@ function nextGPXPoint(pos, points) {
     const point = points[i];
 
     if (point.lenSq === 0) continue;
-    const t = ((pos.lat - point.lat) * point.dy + (pos.lon - point.lon) * point.dx) / point.lenSq;
+    const t = ((pos.lat - point.lat) * point.dy + (pos.lon - point.lon) * point.dx) / point.lenSq; // OF: ((pos.lat - point.lat) * point.dy + (pos.lon - point.lon) * point.scale * point.dx) / point.lenSq
     const tClamped = Math.max(0, Math.min(1, t));
 
     const projLat = point.lat + tClamped * point.dy;
@@ -285,7 +285,7 @@ function nextGPXPoint(pos, points) {
       const point = points[i];
 
       if (point.lenSq === 0) continue;
-      const t = ((pos.lat - point.lat) * point.dy + (pos.lon - point.lon) * point.dx) / point.lenSq;
+      const t = ((pos.lat - point.lat) * point.dy + (pos.lon - point.lon) * point.dx) / point.lenSq; // OF: ((pos.lat - point.lat) * point.dy + (pos.lon - point.lon) * point.scale * point.dx) / point.lenSq
       const tClamped = Math.max(0, Math.min(1, t));
 
       const projLat = point.lat + tClamped * point.dy;
@@ -344,8 +344,8 @@ function nextGPXPoint(pos, points) {
       const segmentDist = radSqToMeters(target.lenSq);
       const t = Math.min(1, lookAheadMeters / segmentDist); // Waarom is dit nodig?
   
-      target.lon += target.dx * t;
-      target.lat += target.dy * t / target.scale
+      target.lon += target.dx * t; // Klopt dit?
+      target.lat += target.dy * t / target.scale // Klopt dit?
     }
   }
 
@@ -441,8 +441,9 @@ function updateArrow() {
   // TOON VOLGENDE BOCHT
   if (!nextTurn || nextTurn.index < currentSegmentIndex) {
     for (let i = currentSegmentIndex; i < gpxPoints.length - 1; i++) {
-      const angle = gpxPoints[i].turnAngle;
-      if (gpxPoints[i].isIntersection) {
+      const angle = gpxPoints[i].turn.angle;
+      
+      if (gpxPoints[i].turn.isIntersection) {
         nextTurn = { index: i, angle };
         nextTurnArrow.style.transform = angle > 0
           ? "rotate(90deg) scaleX(-1)"
@@ -644,37 +645,32 @@ function bearing(a, b) {
 }
 
 // Fetch OSM data
-async function fetchOSMData(gpxPoints) {
+async function fetchOSMData() {
+
+  // 1. Haal OSM-data op
   const RADIUS = 20;
-  
-  const aroundQueries = gpxPoints
-    .map(
-      p => `
-        way
-          ["highway"~"path|track|footway|cycleway|steps"]
-          (around:${RADIUS},${p.lat},${p.lon});
-      `
-    )
-    .join("\n");
-
-  const query = `
-  [out:json][timeout:25];
-
-  (
-    ${aroundQueries}
-  );
-
-  out body;
-  >;
-  out skel qt;
-  `;
 
   const response = await fetch(
     "https://overpass-api.de/api/interpreter",
     {
       method: "POST",
       body: new URLSearchParams({
-        data: query
+        data: `
+          [out:json][timeout:25];
+        
+          (
+            ${gpxPoints.map(p => `
+                way
+                  ["highway"~"path|track|footway|cycleway|steps"]
+                  (around:${RADIUS},${p.lat},${p.lon});
+              `
+            ).join("\n")}
+          );
+        
+          out body;
+          >;
+          out skel qt;
+        ` // Werkt dit met de tabs? En moeten we de route misschien vereenvoudigen voordat we dit doen?
       }),
       headers: {
         "Content-Type":
@@ -687,150 +683,74 @@ async function fetchOSMData(gpxPoints) {
 
   console.log("OSM DATA", data);
 
-  // ===== Node map =====
+  // 2. Maak een map: nodeId -> coords
+  const nodeMap = new Map(
+    data.elements
+      .filter(el => el.type === "node")
+      .map(el => [el.id, el])
+  );
 
-  const nodeMap = new Map();
-
-  for (const el of data.elements) {
-    if (el.type === "node") {
-      nodeMap.set(el.id, {
-        lat: el.lat,
-        lon: el.lon
-      });
-    }
-  }
-
-  // ===== Adjacency graph =====
-
+  // 3. Maak een map: node -> {alle verbonden nodes}
   const adjacency = new Map();
 
   for (const way of data.elements) {
-    if (el.type !== "way") continue;
+    if (way.type !== "way") continue;
 
     for (let i = 0; i < way.nodes.length - 1; i++) {
       const a = way.nodes[i];
       const b = way.nodes[i + 1];
 
-      if (!adjacency.has(a)) {
-        adjacency.set(a, new Set());
-      }
-
-      if (!adjacency.has(b)) {
-        adjacency.set(b, new Set());
-      }
-
+      if (!adjacency.has(a)) adjacency.set(a, new Set());
+      if (!adjacency.has(b)) adjacency.set(b, new Set());
+      
       adjacency.get(a).add(b);
       adjacency.get(b).add(a);
     }
   }
 
-  // ===== Detect intersections =====
-
+  // 4. Detect intersections (nodes met 3 of meer verbindingen)
   const intersections = [];
-
   for (const [nodeId, neighbors] of adjacency.entries()) {
-    // >= 3 verbindingen = kruispunt
-    if (neighbors.size >= 3) {
-      const node = nodeMap.get(nodeId);
-
-      if (node) {
-        intersections.push({
-          id: nodeId,
-          lat: node.lat,
-          lon: node.lon,
-          neighbors: [...neighbors]
-        });
-      }
-    }
+    if (neighbors.size >= 3) intersections.push(nodeMap.get(nodeId));
   }
 
-  console.log(
-    "Intersections found:",
-    intersections.length
-  );
+  console.log("Intersections found:", intersections.length);
 
-  // ===== Match intersections to GPX =====
-
-  for (const gpxPoint of gpxPoints) {
-    gpxPoint.isIntersection = false;
-    gpxPoint.intersectionData = null;
-  }
-
+  // 5. Match intersections aan GPX-punten
   intersections.forEach(intersection => {
     let nearestIndex = -1;
-    let nearestDistance = Infinity;
+    let nearestDistSq = Infinity;
 
-    for (let i = 0; i < gpxPoints.length; i++) {
-      const dist = distanceMeters(
-        gpxPoints[i],
-        intersection
-      );
+    for (let i = 0; i < gpxPoints.length; i++) { // Dit is O(n²), dus het moet efficiënter! Daarnaast kan het in theorie dubbele matches geven.
+      const p = gpxPoints[i];
+      
+      const x = degToRad(intersection.lon - p.lon) * Math.cos(degToRad((intersection.lat + p.lat) / 2));
+      const y = degToRad(intersection.lat - p.lat);
+      const distSq = x*x + y*y;
 
-      if (dist < nearestDistance) {
-        nearestDistance = dist;
+      if (distSq < nearestDistSq) {
+        nearestDistSq = dist;
         nearestIndex = i;
       }
     }
 
     // Alleen markeren als dichtbij genoeg
-    if (
-      nearestIndex !== -1 &&
-      nearestDistance < 10
-    ) {
-      const gpxPoint = gpxPoints[nearestIndex];
-
-      gpxPoint.isIntersection = true;
-
-      gpxPoint.intersectionData = {
-        osmNodeId: intersection.id,
-        distance: nearestDistance,
-        connectedSegments:
-          intersection.neighbors.length
-      };
+    if (nearestIndex !== -1 && radSqToMeters(nearestDistSq) < 10) {
+      point = gpxPoints[nearestIndex];
+      point.turn.isIntersection = true;
+      
+      // Richting bepalen (links/rechtdoor/rechts)
+      const turnAngle = point.turn.angle;
+      
+      if (turnAngle > 30) {
+        point.turn.direction = "right";
+      } else if (turnAngle < -30) {
+        point.turn.direction = "left";
+      } else {
+        point.turn.direction = "straight";
+      }
     }
   });
-
-  // ===== Determine turn direction =====
-
-  for (
-    let i = 1;
-    i < gpxPoints.length - 1;
-    i++
-  ) {
-    const point = gpxPoints[i];
-
-    if (!point.isIntersection) continue;
-
-    const prev = gpxPoints[i - 1];
-    const next = gpxPoints[i + 1];
-
-    const incomingBearing = bearing(prev, point);
-    const outgoingBearing = bearing(point, next);
-
-    const turn = angleDiffSigned(
-      outgoingBearing,
-      incomingBearing
-    );
-
-    let direction = "straight";
-
-    if (turn > 30) {
-      direction = "right";
-    } else if (turn < -30) {
-      direction = "left";
-    }
-
-    point.turn = {
-      angle: turn,
-      direction
-    };
-  }
-
-  return {
-    data,
-    intersections,
-    gpxPoints
-  };
 }
 
 // START BUTTON
@@ -872,8 +792,7 @@ uploadButton.addEventListener("change", function(e) {
         remainingDistance: null,
         dx: null, dy: null,
         scale: null, lenSq: null,
-        turnAngle: null,
-        isIntersection: null
+        turn: {isIntersection: false, angle: null, direction: "straight"}
       });
     }
     
@@ -926,9 +845,15 @@ uploadButton.addEventListener("change", function(e) {
       
       const bearingA = radToDeg(Math.atan2(A.dy, A.dx));
       const bearingB = radToDeg(Math.atan2(B.dy, B.dx));
-        
-      B.turnAngle = ((bearingB - bearingA + 540) % 360) - 180; // -180 → 180
-      gpxPoints[i].isIntersection = Math.abs(B.turnAngle) > 45;
+
+      B.turn.angle = angleDiffSigned(bearingB, bearingA);
+      if (Math.abs(B.turn.angle) < 100) {
+        B.turn.direction = null;
+      } else {
+        gpxPoints[i].turn.isIntersection = true;
+        if (B.turn.angle >  30) B.turn.direction = "right";
+        if (B.turn.angle < -30) B.turn.direction = "left";
+      }
     }
 
     // Bekijk of er bochten zijn a.d.h.v. OSM-data
@@ -952,7 +877,7 @@ uploadButton.addEventListener("change", function(e) {
     });
     
     // marge toevoegen
-    gpxBounds.minLat -= gpxPoints.length / 100000;
+    gpxBounds.minLat -= gpxPoints.length / 100000; // Dit is onlogisch
     gpxBounds.maxLat += gpxPoints.length / 100000;
     gpxBounds.minLon -= gpxPoints.length / 100000;
     gpxBounds.maxLon += gpxPoints.length / 100000;
