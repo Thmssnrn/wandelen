@@ -729,7 +729,7 @@ async function fetchOSMData() {
       const distSq = x*x + y*y;
 
       if (distSq < nearestDistSq) {
-        nearestDistSq = dist;
+        nearestDistSq = distSq;
         nearestIndex = i;
       }
     }
