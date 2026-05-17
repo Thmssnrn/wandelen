@@ -659,7 +659,7 @@ async function fetchOSMData() {
     acc += dist;
 
     if (acc > RADIUS) {
-      sampled.push(gpxPoints[i]);
+      sampledGpx.push(gpxPoints[i]);
       acc = dist;
     }
   }
