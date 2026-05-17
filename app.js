@@ -389,19 +389,19 @@ function updateArrow() {
   
   let heading = currentHeading;
   
-  // Gaussische snap naar gpsHeading (als die vrijwel gelijk zijn)
   if (useGpsHeading) {
+    // Gaussische snap naar gpsHeading (als die vrijwel gelijk zijn)
     let delta = angleDiffSigned(gpsHeading, heading)
     let snap = Math.exp(delta * delta / -129600 * 100); // Hoe groter de 100, hoe kleiner het snapbereik.
     heading += snap * delta;
     heading = (heading + 360) % 360;
+  } else {
+    // Gaussische snapfactor naar currentBearing (als die vrijwel gelijk zijn)
+    let delta = angleDiffSigned(currentBearing, heading)
+    let snap = Math.exp(delta * delta / -129600 * 100); // Hoe groter de 100, hoe kleiner het snapbereik.
+    heading += snap * delta;
+    heading = (heading + 360) % 360;
   }
-  
-  // Gaussische snapfactor naar currentBearing (als die vrijwel gelijk zijn)
-  let delta = angleDiffSigned(currentBearing, heading)
-  let snap = Math.exp(delta * delta / -129600 * 100); // Hoe groter de 100, hoe kleiner het snapbereik.
-  heading += snap * delta;
-  heading = (heading + 360) % 360;
   
   let alpha;
   if (gpsSpeed > 2) {
