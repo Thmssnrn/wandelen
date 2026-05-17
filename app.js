@@ -665,7 +665,7 @@ async function fetchOSMData() {
   }
   sampledGpx.push(gpxPoints.at(-1));
 
-  console.log({radius, sampledGpx: sampledGpx.length})
+  console.log({RADIUS, sampledGpx: sampledGpx.length})
 
   // Dit moet misschien in chuncks of zo, want dit kan nog steeds te groot zijn.
   const response = await fetch(
