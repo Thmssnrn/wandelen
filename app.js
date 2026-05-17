@@ -648,8 +648,26 @@ function bearing(a, b) {
 async function fetchOSMData() {
 
   // 1. Haal OSM-data op
-  const RADIUS = 20;
+  const RADIUS = Math.ceil(gpxPoints[0].remainingDistance / 200);
 
+  // Sample GPX (zodat het verzoek kleiner wordt)
+  let sampledGpx = [gpxPoints[0]];
+  let acc = 0;
+
+  for (let i = 0; i < gpxPoints.length - 1; i++) {
+    dist = distanceMeters(gpxPoints[i], gpxPoints[i + 1]);
+    acc += dist;
+
+    if (acc > RADIUS) {
+      sampled.push(gpxPoints[i]);
+      acc = dist;
+    }
+  }
+  sampledGpx.push(gpxPoints.at(-1));
+
+  console.log({radius, sampledGpx: sampledGpx.length})
+
+  // Dit moet misschien in chuncks of zo, want dit kan nog steeds te groot zijn.
   const response = await fetch(
     "https://overpass-api.de/api/interpreter",
     {
@@ -659,7 +677,7 @@ async function fetchOSMData() {
           [out:json][timeout:25];
         
           (
-            ${gpxPoints.map(p => `
+            ${sampledGpx.map(p => `
                 way
                   ["highway"~"path|track|footway|cycleway|steps"]
                   (around:${RADIUS},${p.lat},${p.lon});
@@ -670,7 +688,7 @@ async function fetchOSMData() {
           out body;
           >;
           out skel qt;
-        ` // Werkt dit met de tabs? En moeten we de route misschien vereenvoudigen voordat we dit doen?
+        ` // Werkt dit met de tabs?
       }),
       headers: {
         "Content-Type":
