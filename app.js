@@ -367,10 +367,7 @@ function updateArrow() {
   if (!nav) return;
   
   // Eerste meting na hervatten negeren
-  if (!resume) {
-    resume = true;
-    return;
-  }
+  if (!resume) {resume = true; return;}
 
   const { target, navPosition, distanceToRoute, distanceToTarget } = nav;
 
@@ -392,11 +389,20 @@ function updateArrow() {
   
   let heading = currentHeading;
   
-  // Gebruik GPS-heading als die vrijwel gelijk is aan de compass-heading (voor als de gebruiker het apparaat scheef houdt, dan moet de pijl meedraaien)
-  if (useGpsHeading && angleDiff(currentHeading, gpsHeading) < 20) {
-    heading = gpsHeading;
+  // Gaussische snap naar gpsHeading (als die vrijwel gelijk zijn)
+  if (useGpsHeading) {
+    let delta = angleDiffSigned(gpsHeading, heading)
+    let snap = Math.exp(delta * delta / -129600 * 25); // Hoe groter de 25, hoe lokaler de snap.
+    heading += snap * delta;
+    heading = (heading + 360) % 360;
   }
-
+  
+  // Gaussische snapfactor naar currentBearing (als die vrijwel gelijk zijn)
+  let delta = angleDiffSigned(currentBearing, heading)
+  let snap = Math.exp(delta * delta / -129600 * 25); // Hoe groter de 25, hoe lokaler de snap.
+  heading += snap * delta;
+  heading = (heading + 360) % 360;
+  
   let alpha;
   if (gpsSpeed > 2) {
     if (arrowTransition !== "transform 1s linear") {
@@ -411,9 +417,10 @@ function updateArrow() {
     }
     alpha = 0.75; // Veel smoothing
   }
-  
-  displayedRotation += angleDiffSigned(currentBearing - heading, displayedRotation) * alpha;
-  const normalized = ((Math.round(displayedRotation) + 180) % 360 + 360) % 360 - 180; // -180º -> 180º
+
+  const targetRotation = currentBearing - heading;
+  displayedRotation += angleDiffSigned(targetRotation, displayedRotation) * alpha;
+  const normalized = (Math.round(displayedRotation) + 540) % 360 - 180; // -180º -> 180º
   
   if (arrowRotationInt != normalized) {
     arrow.style.transform = `rotate(${displayedRotation}deg)`;
